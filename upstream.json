@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-08-27",
+  "desktop": "0.0.1-poc.0",
+  "electron": "43.4.0",
+  "dsh": {
+    "npm": "0.1.1-rc.2",
+    "localSource": "D:\\deepseek\\deepseek-harness-master",
+    "localBuildCommitEvidence": "b150a55",
+    "officialSourceModified": false
+  },
+  "nodeEngine": "^22.19.0 || >=24.0.0",
+  "pnpm": "11.7.0",
+  "pnpmLockSha256": "6e88b7f17463815b27ecdcccb85e0241db8e5ca8992b5d3089ece2ade66ff98b"
+}
