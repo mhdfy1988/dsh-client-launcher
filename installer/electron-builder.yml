@@ -1,0 +1,34 @@
+appId: local.dsh.client.launcher
+productName: DSH 客户端启动器
+executableName: dsh-client-launcher
+
+directories:
+  output: .artifacts/installer
+  buildResources: assets
+
+artifactName: DSH-Client-Launcher-${version}-${arch}-setup.${ext}
+
+publish:
+  provider: github
+  owner: mhdfy1988
+  repo: dsh-desktop-shell
+  releaseType: release
+
+win:
+  icon: assets/dsh-desktop-icon.ico
+  requestedExecutionLevel: asInvoker
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DSH 客户端启动器
+  uninstallDisplayName: DSH 客户端启动器
+  deleteAppDataOnUninstall: false
+  runAfterFinish: false

@@ -8,6 +8,8 @@
 | DeepSeek Harness whale mark | source checkout | MIT | Derived from `apps/web/public/favicon.svg` |
 | Cordis | 4.0.1 | MIT | <https://github.com/cordiverse/cordis> |
 | Electron | 43.4.0 | MIT | <https://github.com/electron/electron> |
+| electron-updater | 6.8.9 | MIT | <https://github.com/electron-userland/electron-builder> |
+| electron-builder | 26.15.3 | MIT | <https://github.com/electron-userland/electron-builder> |
 | sharp | 0.35.3 | Apache-2.0 | <https://github.com/lovell/sharp> |
 | TypeScript | 6.0.3 | Apache-2.0 | <https://github.com/microsoft/TypeScript> |
 

@@ -33,12 +33,12 @@ const disposeCompatibility = installElectronNodeChildCompatibility(async title =
 })
 report(`picker smoke parent ${JSON.stringify({ execPath: process.execPath, worker, selectionPath })}`)
 const child = spawn(process.execPath, [worker], {
-  env: { ...process.env, DSH_DIALOG_TITLE: 'DSH Desktop picker smoke' },
+  env: { ...process.env, DSH_DIALOG_TITLE: 'DSH 客户端启动器目录选择测试' },
   stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   windowsHide: true,
 })
 
-const escapedTitle = 'DSH Desktop picker smoke'.replaceAll("'", "''")
+const escapedTitle = 'DSH 客户端启动器目录选择测试'.replaceAll("'", "''")
 const buttonName = selectionPath === undefined ? '取消' : '选择文件夹'
 const englishButtonName = selectionPath === undefined ? 'Cancel' : 'Select Folder'
 const automation = `

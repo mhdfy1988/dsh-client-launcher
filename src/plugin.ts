@@ -13,5 +13,5 @@ export function apply(ctx: Context): void {
     return () => {
       process.stdout.write('DSH_DESKTOP_POC_PLUGIN_UNMOUNTED\n')
     }
-  }, 'dsh-desktop-shell: minimal host contribution')
+  }, 'dsh-client-launcher: minimal host contribution')
 }

@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const portableDir = process.env.DSH_DESKTOP_PORTABLE_DIR ?? fileURLToPath(new URL('../.artifacts/portable/dsh-desktop-shell-win32-x64/', import.meta.url))
-const executable = join(portableDir, 'dsh-desktop-shell.exe')
+const portableDir = process.env.DSH_DESKTOP_PORTABLE_DIR ?? fileURLToPath(new URL('../.artifacts/portable/dsh-client-launcher-win32-x64/', import.meta.url))
+const executableName = process.env.DSH_DESKTOP_EXECUTABLE_NAME ?? 'dsh-client-launcher'
+const executable = join(portableDir, `${executableName}.exe`)
 await access(executable)
 const packagedDataRoot = await mkdtemp(join(tmpdir(), 'dsh-desktop-smoke-'))
 const runtimeRoot = process.env.DSH_DESKTOP_SMOKE_RUNTIME_DIR

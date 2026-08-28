@@ -50,6 +50,11 @@ export class HarnessRuntimeNotReadyError extends Error {
 export function getHarnessRuntimeRoot(): string {
   const override = process.env.DSH_DESKTOP_RUNTIME_DIR?.trim()
   if (override) return resolve(override)
+  return getFolderLocalHarnessRuntimeRoot()
+}
+
+/** Return the DSH root implied only by the Desktop executable location. */
+export function getFolderLocalHarnessRuntimeRoot(): string {
   if (app.isPackaged) return dirname(dirname(process.execPath))
   return SOURCE_ROOT
 }

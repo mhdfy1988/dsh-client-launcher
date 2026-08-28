@@ -1,13 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray, type IpcMainEvent, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray, type IpcMainEvent, type IpcMainInvokeEvent, type OpenDialogOptions } from 'electron'
 import type { Context } from '@deepseek-ai/cordis'
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { inspect } from 'node:util'
 import { prepareProfile } from './profile.js'
 import { buildHarnessWorkspace } from './runtime-build.js'
 import {
   getHarnessRuntimeRoot,
+  getFolderLocalHarnessRuntimeRoot,
   HarnessRuntimeNotReadyError,
   importHarnessPackage,
   inspectHarnessRuntime,
@@ -15,10 +18,23 @@ import {
   readHarnessVersion,
 } from './runtime.js'
 import { createShutdownController } from './shutdown.js'
-import { installElectronNodeChildCompatibility } from './electron-node-child.js'
+import {
+  installElectronNodeChildCompatibility,
+  installElectronNodePtyCompatibility,
+  type ElectronNodePtyCompatibility,
+  type NodePtyModule,
+} from './electron-node-child.js'
 import { resolveDesktopTheme } from './theme-colors.js'
 import { installBrokenPipeGuard } from './output.js'
+import { renderRecoveryPage } from './recovery-page.js'
+import {
+  createEmptyRuntimeClientRegistry,
+  parseRuntimeClientRegistry,
+  type RuntimeClientRecord,
+  type RuntimeClientRegistry,
+} from './runtime-clients.js'
 import { applyWindowControl } from './window-controls.js'
+import { installAutoUpdate, type AutoUpdateHandle } from './auto-update.js'
 
 const BIN_NAME = 'dsh-desktop-shell'
 const PROJECT_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -26,8 +42,8 @@ const DEFAULT_USER_DATA = app.getPath('userData')
 const PACKAGED_DATA_ROOT = process.env.DSH_DESKTOP_POC_PACKAGED_DATA_ROOT ?? DEFAULT_USER_DATA
 const POC_ROOT = app.isPackaged ? join(PACKAGED_DATA_ROOT, 'poc') : join(PROJECT_ROOT, '.poc')
 const USER_DATA = app.isPackaged ? join(PACKAGED_DATA_ROOT, 'electron-user-data') : join(POC_ROOT, 'electron-user-data')
-const DSH_HOME = join(POC_ROOT, 'dsh-home')
 const WINDOW_STATE = join(USER_DATA, 'window-state.json')
+const RUNTIME_CLIENTS = join(POC_ROOT, 'runtime-clients.json')
 const smokeDelay = Number.parseInt(process.env.DSH_DESKTOP_POC_SMOKE_MS ?? '', 10)
 const smokeMode = Number.isFinite(smokeDelay) && smokeDelay >= 0
 const traceFile = join(POC_ROOT, 'desktop-startup.log')
@@ -40,10 +56,9 @@ function trace(message: string): void {
   appendFileSync(traceFile, `${new Date().toISOString()} ${message}\n`, 'utf8')
 }
 
+mkdirSync(POC_ROOT, { recursive: true })
 mkdirSync(USER_DATA, { recursive: true })
-mkdirSync(DSH_HOME, { recursive: true })
 app.setPath('userData', USER_DATA)
-process.env.DSH_HOME = DSH_HOME
 process.env.DSH_TELEMETRY_DISABLED = '1'
 
 let host: Context | undefined
@@ -54,9 +69,15 @@ let relaunchRequested = false
 let runtimeBuildActive = false
 let removeModuleFallback: (() => void) | undefined
 let removeElectronNodeChildCompatibility: (() => void) | undefined
+let electronNodePtyCompatibility: ElectronNodePtyCompatibility | undefined
+let autoUpdate: AutoUpdateHandle | undefined
 
 const shutdown = createShutdownController(
   async () => {
+    const remainingPtys = await electronNodePtyCompatibility?.prepareForShutdown() ?? 0
+    if (remainingPtys > 0) {
+      writeFileSync(1, `DSH_DESKTOP_POC_PTY_DRAIN_INCOMPLETE ${JSON.stringify({ remainingPtys })}\n`)
+    }
     if (window !== undefined && !window.isDestroyed()) window.destroy()
     window = undefined
     tray?.destroy()
@@ -67,7 +88,11 @@ const shutdown = createShutdownController(
     removeModuleFallback = undefined
     removeElectronNodeChildCompatibility?.()
     removeElectronNodeChildCompatibility = undefined
-    process.stdout.write('DSH_DESKTOP_POC_DISPOSED\n')
+    electronNodePtyCompatibility?.dispose()
+    electronNodePtyCompatibility = undefined
+    autoUpdate?.dispose()
+    autoUpdate = undefined
+    writeFileSync(1, 'DSH_DESKTOP_POC_DISPOSED\n')
   },
   (code) => {
     nativeExitStarted = true
@@ -99,6 +124,174 @@ function installRuntimeBuildHandler(): void {
     } finally {
       runtimeBuildActive = false
     }
+  })
+}
+
+function runtimeClientId(root: string): string {
+  const normalized = process.platform === 'win32' ? resolve(root).toLocaleLowerCase('en-US') : resolve(root)
+  return createHash('sha256').update(normalized).digest('hex').slice(0, 16)
+}
+
+function readRuntimeClients(): RuntimeClientRegistry {
+  if (!existsSync(RUNTIME_CLIENTS)) return createEmptyRuntimeClientRegistry()
+  const value: unknown = JSON.parse(readFileSync(RUNTIME_CLIENTS, 'utf8'))
+  return parseRuntimeClientRegistry(value)
+}
+
+function writeRuntimeClients(registry: RuntimeClientRegistry): void {
+  writeFileSync(RUNTIME_CLIENTS, `${JSON.stringify(registry, null, 2)}\n`, 'utf8')
+}
+
+function createRuntimeClient(root: string): RuntimeClientRecord {
+  const absoluteRoot = resolve(root)
+  return {
+    id: runtimeClientId(absoluteRoot),
+    name: basename(absoluteRoot) || absoluteRoot,
+    root: absoluteRoot,
+  }
+}
+
+function upsertRuntimeClient(registry: RuntimeClientRegistry, client: RuntimeClientRecord): RuntimeClientRegistry {
+  return {
+    ...registry,
+    clients: [...registry.clients.filter(item => item.id !== client.id), client],
+  }
+}
+
+interface RuntimeClientView extends RuntimeClientRecord {
+  source: 'folder' | 'saved'
+  saved: boolean
+  active: boolean
+  ready: boolean
+  canBuild: boolean
+  layout?: string
+  version?: string
+  issues: string[]
+}
+
+function inspectRuntimeClient(client: RuntimeClientRecord, source: RuntimeClientView['source'], registry: RuntimeClientRegistry): RuntimeClientView {
+  const inspection = inspectHarnessRuntime(client.root)
+  let version: string | undefined
+  if (inspection.anchor !== undefined) {
+    const manifest = JSON.parse(readFileSync(inspection.anchor, 'utf8')) as { version?: unknown }
+    if (typeof manifest.version === 'string') version = manifest.version
+  }
+  return {
+    ...client,
+    source,
+    saved: registry.clients.some(item => item.id === client.id),
+    active: registry.activeId === client.id,
+    ready: inspection.ready,
+    canBuild: inspection.canBuild,
+    ...(inspection.layout === undefined ? {} : { layout: inspection.layout }),
+    ...(version === undefined ? {} : { version }),
+    issues: inspection.issues,
+  }
+}
+
+function listRuntimeClients(registry = readRuntimeClients()): RuntimeClientView[] {
+  const folderClient = createRuntimeClient(getFolderLocalHarnessRuntimeRoot())
+  const savedFolderClient = registry.clients.find(client => client.id === folderClient.id)
+  const views = [inspectRuntimeClient(savedFolderClient ?? folderClient, 'folder', registry)]
+  for (const client of registry.clients) {
+    if (client.id === folderClient.id) continue
+    views.push(inspectRuntimeClient(client, 'saved', registry))
+  }
+  return views
+}
+
+function findRuntimeClient(id: string, registry: RuntimeClientRegistry): RuntimeClientRecord | undefined {
+  const folderClient = createRuntimeClient(getFolderLocalHarnessRuntimeRoot())
+  if (folderClient.id === id) return registry.clients.find(client => client.id === id) ?? folderClient
+  return registry.clients.find(client => client.id === id)
+}
+
+function scheduleRuntimeStart(client: RuntimeClientRecord, registry: RuntimeClientRegistry): void {
+  const updated = upsertRuntimeClient(registry, client)
+  writeRuntimeClients({ ...updated, activeId: client.id })
+  process.env.DSH_DESKTOP_RUNTIME_DIR = client.root
+  setTimeout(requestRestart, 250)
+}
+
+function eventOwnsLauncher(event: IpcMainInvokeEvent | IpcMainEvent): boolean {
+  return window !== undefined && !window.isDestroyed() && event.sender === window.webContents
+}
+
+function installRecoveryActionHandlers(): void {
+  ipcMain.handle('dsh-desktop:list-runtimes', (event) => {
+    if (!eventOwnsLauncher(event)) return { clients: [], error: '启动器窗口已经关闭。' }
+    try {
+      return { clients: listRuntimeClients() }
+    } catch (cause) {
+      return { clients: [], error: formatFailure(cause) }
+    }
+  })
+  ipcMain.handle('dsh-desktop:add-runtime', async (event) => {
+    if (!eventOwnsLauncher(event) || window === undefined) return { error: '启动器窗口已经关闭。' }
+    const result = await dialog.showOpenDialog(window, {
+      title: '选择 DSH 根目录',
+      properties: ['openDirectory'],
+    })
+    if (result.canceled || result.filePaths[0] === undefined) return {}
+    const inspection = inspectHarnessRuntime(result.filePaths[0])
+    if (!inspection.ready && !inspection.canBuild) {
+      return { error: inspection.issues.join('\n') }
+    }
+    const registry = readRuntimeClients()
+    writeRuntimeClients(upsertRuntimeClient(registry, createRuntimeClient(inspection.root)))
+    return {}
+  })
+  ipcMain.handle('dsh-desktop:start-runtime', (event, id: unknown) => {
+    if (!eventOwnsLauncher(event)) return { error: '启动器窗口已经关闭。' }
+    if (typeof id !== 'string') return { error: 'DSH 客户端 ID 无效。' }
+    const registry = readRuntimeClients()
+    const client = findRuntimeClient(id, registry)
+    if (client === undefined) return { error: 'DSH 客户端不存在。' }
+    const inspection = inspectHarnessRuntime(client.root)
+    if (!inspection.ready) return { error: inspection.issues.join('\n') }
+    scheduleRuntimeStart(client, registry)
+    return { restarting: true }
+  })
+  ipcMain.handle('dsh-desktop:prepare-runtime', async (event, id: unknown) => {
+    if (!eventOwnsLauncher(event)) return { error: '启动器窗口已经关闭。' }
+    if (typeof id !== 'string') return { error: 'DSH 客户端 ID 无效。' }
+    if (runtimeBuildActive) return { error: '当前 DSH 构建已经在进行中。' }
+    const registry = readRuntimeClients()
+    const client = findRuntimeClient(id, registry)
+    if (client === undefined) return { error: 'DSH 客户端不存在。' }
+    runtimeBuildActive = true
+    try {
+      const result = await buildHarnessWorkspace(client.root)
+      if (!result.ok) return { error: result.log }
+      scheduleRuntimeStart(client, registry)
+      return { restarting: true }
+    } finally {
+      runtimeBuildActive = false
+    }
+  })
+  ipcMain.handle('dsh-desktop:remove-runtime', (event, id: unknown) => {
+    if (!eventOwnsLauncher(event)) return { error: '启动器窗口已经关闭。' }
+    if (typeof id !== 'string') return { error: 'DSH 客户端 ID 无效。' }
+    const registry = readRuntimeClients()
+    if (!registry.clients.some(client => client.id === id)) return {}
+    writeRuntimeClients({
+      version: 1,
+      ...(registry.activeId === id || registry.activeId === undefined ? {} : { activeId: registry.activeId }),
+      clients: registry.clients.filter(client => client.id !== id),
+    })
+    return {}
+  })
+  ipcMain.handle('dsh-desktop:open-install-directory', async (event) => {
+    if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) {
+      return { ok: false, error: '恢复窗口已经关闭。' }
+    }
+    const installDirectory = app.isPackaged ? dirname(process.execPath) : PROJECT_ROOT
+    const error = await shell.openPath(installDirectory)
+    return error === '' ? { ok: true } : { ok: false, error }
+  })
+  ipcMain.on('dsh-desktop:recovery-quit', (event: IpcMainEvent) => {
+    if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) return
+    requestQuit(0)
   })
 }
 
@@ -139,9 +332,9 @@ function showWindow(): void {
 
 function installTray(): void {
   tray = new Tray(nativeImage.createFromPath(DESKTOP_ICON))
-  tray.setToolTip('DSH Desktop POC')
+  tray.setToolTip('DSH 客户端启动器')
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示 DSH Desktop', click: showWindow },
+    { label: '显示 DSH 客户端启动器', click: showWindow },
     { label: '重启 Host', click: requestRestart },
     { type: 'separator' },
     { label: '退出', click: () => { requestQuit(0) } },
@@ -198,15 +391,6 @@ async function waitForRendererReady(target: BrowserWindow): Promise<{ title: str
   throw new Error('renderer did not produce visible content within 5 seconds')
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
 function formatFailure(cause: unknown): string {
   if (cause instanceof AggregateError) return [...cause.errors].map(formatFailure).join('\n')
   if (typeof cause === 'object' && cause !== null) {
@@ -221,16 +405,14 @@ function formatFailure(cause: unknown): string {
   return cause instanceof Error ? cause.stack ?? cause.message : String(cause)
 }
 
-async function showRecovery(cause: unknown): Promise<void> {
+async function showRecovery(cause?: unknown): Promise<void> {
   await host?.fiber.dispose()
   host = undefined
   removeModuleFallback?.()
   removeModuleFallback = undefined
-  const message = cause instanceof Error ? cause.message : String(cause)
-  const canBuild = cause instanceof HarnessRuntimeNotReadyError && cause.inspection.canBuild
   window = new BrowserWindow({
-    width: 760,
-    height: 460,
+    width: 960,
+    height: 640,
     show: !smokeMode,
     backgroundColor: '#080b18',
     icon: DESKTOP_ICON,
@@ -250,10 +432,8 @@ async function showRecovery(cause: unknown): Promise<void> {
     window = undefined
     if (!nativeExitStarted) app.quit()
   })
-  const buildControls = canBuild
-    ? '<p>这是一个 DSH 源码工作区。构建会安装缺失依赖并生成 lib 产物，不会修改源码或插件。</p><button id="build">安装依赖并构建当前 DSH</button><pre id="build-log"></pre><script>document.getElementById("build").addEventListener("click",async()=>{const button=document.getElementById("build");const log=document.getElementById("build-log");button.disabled=true;log.textContent="正在准备当前 DSH，请勿关闭窗口……";const result=await window.dshDesktop.buildRuntime();log.textContent=result.log;if(!result.ok)button.disabled=false;});</script>'
-    : ''
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>DSH Desktop 启动失败</title><style>body{margin:0;background:#080b18;color:#edf0ff;font:16px/1.7 system-ui;padding:48px}main{max-width:720px;margin:auto;border:1px solid #343b66;border-radius:18px;padding:30px;background:#10152a}h1{margin-top:0;font-size:24px}code,pre{display:block;padding:14px;background:#090d1b;border-radius:10px;color:#ffb4bd;white-space:pre-wrap;max-height:260px;overflow:auto}button{margin-top:10px;padding:10px 16px;border:1px solid #7568d8;border-radius:9px;background:#29234d;color:#fff;cursor:pointer}button:disabled{opacity:.55;cursor:wait}</style><main><h1>DSH Desktop 启动失败</h1><p>主窗口没有继续加载。关闭此窗口即可结束本次隔离运行。</p><code>${escapeHtml(message)}</code>${buildControls}</main></html>`
+  const message = cause === undefined ? undefined : cause instanceof Error ? cause.message : String(cause)
+  const html = renderRecoveryPage(message === undefined ? {} : { message })
   await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
   process.stdout.write('DSH_DESKTOP_POC_RECOVERY_READY\n')
   if (smokeMode) setTimeout(() => { requestQuit(0) }, smokeDelay)
@@ -261,13 +441,14 @@ async function showRecovery(cause: unknown): Promise<void> {
 
 async function start(): Promise<void> {
   trace('start')
-  app.setName('DSH Desktop POC')
+  app.setName('DSH 客户端启动器')
   if (!app.requestSingleInstanceLock()) {
     app.exit(0)
     return
   }
   installQuitSources()
   installRuntimeBuildHandler()
+  installRecoveryActionHandlers()
   installThemeHandler()
   installWindowControlHandler()
   Menu.setApplicationMenu(null)
@@ -285,12 +466,34 @@ async function start(): Promise<void> {
       : await dialog.showOpenDialog(window, options)
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })
-  let runtime = inspectHarnessRuntime()
+  const explicitRoot = process.env.DSH_DESKTOP_RUNTIME_DIR?.trim()
+  let automaticRoot: string | undefined
+  if (explicitRoot !== undefined && explicitRoot !== '') {
+    automaticRoot = explicitRoot
+  } else if (smokeMode) {
+    automaticRoot = getFolderLocalHarnessRuntimeRoot()
+  } else {
+    const registry = readRuntimeClients()
+    automaticRoot = registry.clients.find(client => client.id === registry.activeId)?.root
+  }
+  if (automaticRoot === undefined) {
+    await showRecovery()
+    return
+  }
+  process.env.DSH_DESKTOP_RUNTIME_DIR = automaticRoot
+  const runtimeDshHome = join(POC_ROOT, 'runtimes', runtimeClientId(automaticRoot), 'dsh-home')
+  mkdirSync(runtimeDshHome, { recursive: true })
+  process.env.DSH_HOME = runtimeDshHome
+  let runtime = inspectHarnessRuntime(automaticRoot)
   if (!runtime.ready && process.env.DSH_DESKTOP_POC_AUTO_BUILD === '1' && runtime.canBuild) {
     const buildResult = await buildHarnessWorkspace(runtime.root)
     process.stdout.write(`DSH_DESKTOP_POC_BUILD_RESULT ${JSON.stringify(buildResult)}\n`)
     if (!buildResult.ok) throw new Error(buildResult.log)
     runtime = inspectHarnessRuntime(runtime.root)
+  }
+  if (!runtime.ready && explicitRoot === undefined && !smokeMode) {
+    await showRecovery(new HarnessRuntimeNotReadyError(runtime))
+    return
   }
   if (!runtime.ready) throw new HarnessRuntimeNotReadyError(runtime)
   const [{ boot, loadLayeredEnv }, { provideCmdline }, { DSH_LAUNCH_ENVIRONMENT_KEY }] = await Promise.all([
@@ -300,9 +503,9 @@ async function start(): Promise<void> {
     importHarnessPackage<typeof import('@deepseek-ai/dsh-host-webserver')>('@deepseek-ai/dsh-host-webserver'),
   ])
   const dshVersion = readHarnessVersion()
-  if (process.platform === 'win32') app.setAppUserModelId('local.dsh.desktop.poc')
+  if (process.platform === 'win32') app.setAppUserModelId('local.dsh.client.launcher')
   process.stdout.write(`DSH_DESKTOP_POC_RUNTIME ${JSON.stringify({
-    desktop: '0.0.1-poc.0',
+    desktop: '0.1.0',
     electron: process.versions.electron,
     node: process.versions.node,
     modules: process.versions.modules,
@@ -313,7 +516,11 @@ async function start(): Promise<void> {
     throw new Error('forced POC boot failure')
   }
 
-  const prepared = await prepareProfile(DSH_HOME)
+  const prepared = await prepareProfile(runtimeDshHome)
+  const profileRequire = createRequire(fileURLToPath(prepared.bareModuleBaseUrl))
+  const subprocessLocalManifest = profileRequire.resolve('@deepseek-ai/dsh-subprocess-local/package.json')
+  const runtimeNodePty = createRequire(subprocessLocalManifest)('node-pty') as NodePtyModule
+  electronNodePtyCompatibility = installElectronNodePtyCompatibility(runtimeNodePty)
   removeModuleFallback = installHarnessModuleFallback(prepared.bareModuleBaseUrl)
   trace('profile-prepared')
   const environment = loadLayeredEnv(BIN_NAME, runtime.root)
@@ -380,6 +587,12 @@ async function start(): Promise<void> {
   shutdown.markRunning()
   process.stdout.write(`DSH_DESKTOP_POC_RENDERER_READY ${JSON.stringify(renderer)}\n`)
   installTray()
+  autoUpdate = installAutoUpdate({
+    isPackaged: app.isPackaged,
+    isSmokeMode: smokeMode,
+    resourcesPath: process.resourcesPath,
+    env: process.env,
+  })
   process.stdout.write(`DSH_DESKTOP_POC_READY ${origin}\n`)
 
   if (smokeMode) {

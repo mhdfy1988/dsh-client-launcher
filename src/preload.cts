@@ -11,6 +11,13 @@ const SETTLED_THEME_CONFIRMATION_MS = 450
 
 contextBridge.exposeInMainWorld('dshDesktop', {
   buildRuntime: () => ipcRenderer.invoke('dsh-desktop:build-runtime') as Promise<{ ok: boolean, log: string }>,
+  openInstallDirectory: () => ipcRenderer.invoke('dsh-desktop:open-install-directory') as Promise<{ ok: boolean, error?: string }>,
+  listRuntimes: () => ipcRenderer.invoke('dsh-desktop:list-runtimes') as Promise<{ clients: unknown[], error?: string }>,
+  addRuntime: () => ipcRenderer.invoke('dsh-desktop:add-runtime') as Promise<{ error?: string }>,
+  startRuntime: (id: string) => ipcRenderer.invoke('dsh-desktop:start-runtime', id) as Promise<{ restarting?: boolean, error?: string }>,
+  prepareRuntime: (id: string) => ipcRenderer.invoke('dsh-desktop:prepare-runtime', id) as Promise<{ restarting?: boolean, error?: string }>,
+  removeRuntime: (id: string) => ipcRenderer.invoke('dsh-desktop:remove-runtime', id) as Promise<{ error?: string }>,
+  quit: () => { ipcRenderer.send('dsh-desktop:recovery-quit') },
 })
 
 const BACKGROUND_TOKENS = ['--dsw-alias-bg-base', '--background', '--color-background', '--bg-primary']

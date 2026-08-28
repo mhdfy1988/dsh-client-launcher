@@ -1,8 +1,9 @@
 {
   "name": "dsh-desktop-shell",
-  "version": "0.0.1-poc.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "Independent Electron host proof of concept for DeepSeek Harness",
+  "description": "Independent Electron client launcher for DeepSeek Harness",
+  "author": "mhdfy1988",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mhdfy1988/dsh-desktop-shell.git"
@@ -31,7 +32,10 @@
     "smoke:window-state": "pnpm run build && node scripts/window-state-smoke.mjs",
     "smoke:single-instance": "pnpm run build && node scripts/single-instance-smoke.mjs",
     "package:portable": "pnpm run icons && pnpm run build && node scripts/package-portable.mjs",
+    "package:installer": "node scripts/package-installer.mjs",
+    "smoke:installer": "node scripts/installer-lifecycle-smoke.mjs",
     "smoke:portable": "pnpm run package:portable && node scripts/portable-smoke.mjs",
+    "smoke:agent-toolchain": "pnpm run package:portable && node scripts/agent-toolchain-smoke.mjs",
     "smoke:directory-picker": "pnpm run build && electron scripts/directory-picker-electron-smoke.mjs",
     "smoke:titlebar-cdp": "node scripts/titlebar-cdp-smoke.mjs",
     "smoke:abi": "electron scripts/native-abi-electron.mjs"
@@ -47,6 +51,7 @@
     "@deepseek-ai/dsh-host-webserver": "0.1.1-rc.2",
     "@deepseek-ai/dsh-launch-environment": "0.1.1-rc.2",
     "@standard-schema/spec": "1.1.0",
+    "electron-updater": "6.8.9",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
@@ -54,6 +59,7 @@
     "@electron/packager": "20.3.0",
     "@types/node": "24.10.1",
     "electron": "43.4.0",
+    "electron-builder": "26.15.3",
     "koffi": "3.1.6",
     "node-pty": "1.2.0-beta.15",
     "sharp": "0.35.3",

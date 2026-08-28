@@ -1,6 +1,6 @@
-# DSH Desktop Shell 协作规则
+# DSH 客户端启动器协作规则
 
-本仓库是 DeepSeek Harness 的独立 Windows 桌面宿主，不是官方 Harness 源码分叉。
+本仓库是 DeepSeek Harness 的独立 Windows 客户端启动器，不是官方 Harness 源码分叉。仓库和 npm 包仍保留 `dsh-desktop-shell` 这一内部兼容标识。
 
 - 禁止直接修改或复制后改写 `D:\deepseek\deepseek-harness-master` 的源码。
 - Harness 只通过已发布 npm 包、公开导出、Profile、Bundle、Service 和 Client 扩展点接入。
@@ -12,6 +12,6 @@
 - 沙箱 preload 必须保持单文件自包含，或在构建时打成单文件；不得让 TypeScript 产物在运行时 `require` 相邻自定义模块。
 - GUI 进程写入父进程拥有的诊断管道时必须忽略 `EPIPE`，但其他输出错误仍应显式失败。
 - DSH 用 `process.execPath` 启动 Node 子进程时，必须先验证 Electron 语义；兼容处理只能精确匹配目标子进程，不得全局设置 `ELECTRON_RUN_AS_NODE`。
-- 当前 POC 只保留已经验证的托盘、窗口状态、自绘标题栏和主题同步；更新器、插件市场和安装器必须等发布阶段单独设计并验证。
+- 当前 POC 只保留已经验证的托盘、窗口状态、自绘标题栏、主题同步和受配置控制的自动更新协调器；正式签名、更新 feed、失败回滚、插件市场和安装器发布仍必须单独验证。
 - 新行为需要对应测试和文档；版本发布前维护 `CHANGELOG.md`。
 - 文档校验必须显式枚举 `docs/` 和根文档；不得从仓库根递归后再过滤 `node_modules`、`lib` 或 `.poc`。
