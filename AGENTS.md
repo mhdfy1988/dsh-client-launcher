@@ -1,6 +1,6 @@
 # DSH 客户端启动器协作规则
 
-本仓库是 DeepSeek Harness 的独立 Windows 客户端启动器，不是官方 Harness 源码分叉。仓库和 npm 包仍保留 `dsh-desktop-shell` 这一内部兼容标识。
+本仓库是 DeepSeek Harness 的独立 Windows 客户端启动器，不是官方 Harness 源码分叉。仓库和 package 名统一为 `dsh-client-launcher`；历史 `DSH_DESKTOP_*` 环境变量和 Cordis 启动标识继续兼容。
 
 - 禁止直接修改或复制后改写 `D:\deepseek\deepseek-harness-master` 的源码。
 - Harness 只通过已发布 npm 包、公开导出、Profile、Bundle、Service 和 Client 扩展点接入。

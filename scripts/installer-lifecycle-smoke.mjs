@@ -119,7 +119,7 @@ try {
   await access(executable)
   const updateConfig = join(installDir, 'resources', 'app-update.yml')
   const updateConfigText = await readFile(updateConfig, 'utf8')
-  if (!updateConfigText.includes('provider: github') || !updateConfigText.includes('repo: dsh-desktop-shell')) {
+  if (!updateConfigText.includes('provider: github') || !updateConfigText.includes('repo: dsh-client-launcher')) {
     throw new Error('updater configuration is missing the GitHub feed')
   }
   await access(desktopShortcut)

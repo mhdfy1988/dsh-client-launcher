@@ -11,7 +11,7 @@ artifactName: DSH-Client-Launcher-${version}-${arch}-setup.${ext}
 publish:
   provider: github
   owner: mhdfy1988
-  repo: dsh-desktop-shell
+  repo: dsh-client-launcher
   releaseType: release
 
 win:

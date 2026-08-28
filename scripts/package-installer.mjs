@@ -42,7 +42,7 @@ await writeFile(
   [
     'provider: github',
     'owner: mhdfy1988',
-    'repo: dsh-desktop-shell',
+    'repo: dsh-client-launcher',
     'releaseType: release',
     'updaterCacheDirName: dsh-desktop-shell-updater',
     '',

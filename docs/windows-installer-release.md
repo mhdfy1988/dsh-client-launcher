@@ -16,7 +16,7 @@
 
 自动更新检查与下载已经接入第一版；正式 Release 同时提供 `latest.yml`、安装器和 blockmap。代码签名、真实升级回归、更新失败回滚和旧 Preview 数据迁移必须继续单独设计和验证。
 
-内部兼容说明：当前仓库名、npm 包名、部分环境变量和历史诊断标识仍使用 `dsh-desktop-shell` / `DSH_DESKTOP_*`。它们是技术标识，不代表对外产品名称；用户可见名称统一为“DSH 客户端启动器”。
+内部兼容说明：仓库和 package 名统一为 `dsh-client-launcher`。历史 `DSH_DESKTOP_*` 环境变量、Cordis 启动标识和 `dsh-desktop-shell-updater` 缓存目录继续保留，避免破坏已安装版本的配置和下载缓存。
 
 ## 2. 与 Todo 项目的关系
 

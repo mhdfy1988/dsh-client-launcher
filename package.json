@@ -1,17 +1,17 @@
 {
-  "name": "dsh-desktop-shell",
+  "name": "dsh-client-launcher",
   "version": "0.1.3",
   "private": true,
   "description": "Independent Electron client launcher for DeepSeek Harness",
   "author": "mhdfy1988",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mhdfy1988/dsh-desktop-shell.git"
+    "url": "git+https://github.com/mhdfy1988/dsh-client-launcher.git"
   },
   "bugs": {
-    "url": "https://github.com/mhdfy1988/dsh-desktop-shell/issues"
+    "url": "https://github.com/mhdfy1988/dsh-client-launcher/issues"
   },
-  "homepage": "https://github.com/mhdfy1988/dsh-desktop-shell#readme",
+  "homepage": "https://github.com/mhdfy1988/dsh-client-launcher#readme",
   "license": "MIT",
   "type": "module",
   "main": "lib/main.js",

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- GitHub 仓库、package 名和自动更新源统一更名为 `dsh-client-launcher`；历史仓库链接由 GitHub 重定向，`DSH_DESKTOP_*` 环境变量和更新缓存标识保持兼容。
+
 ## [0.1.3] - 2026-08-28
 
 ### Added
@@ -86,8 +90,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - 修复便携包 smoke 把临时运行数据写入交付目录且未清理的问题；验证数据改用系统临时目录并在结束时统一删除。
 - 修复沙箱 preload 使用 ESM 输出而未执行的问题，并在构建前清理旧产物，避免源码改名后继续加载陈旧文件。
 
-[Unreleased]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.3...HEAD
-[0.1.3]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/mhdfy1988/dsh-desktop-shell/releases/tag/v0.1.0
+[Unreleased]: https://github.com/mhdfy1988/dsh-client-launcher/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/mhdfy1988/dsh-client-launcher/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/mhdfy1988/dsh-client-launcher/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/mhdfy1988/dsh-client-launcher/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/mhdfy1988/dsh-client-launcher/releases/tag/v0.1.0
