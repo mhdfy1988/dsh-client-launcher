@@ -34,13 +34,13 @@ $env:DSH_DESKTOP_AGENT_TOOLCHAIN_SCENARIO = 'terminal'
 pnpm.cmd run smoke:agent-toolchain
 ```
 
-`package:portable` 把编译后的启动器及 `electron-updater` 的最小生产依赖闭包放入 ASAR，不打入 DSH。依赖先在隔离暂存目录以 hoisted 布局安装，避免 pnpm Junction 与 Electron Packager 裁剪器的解析差异；打包完成后，脚本使用真实 Electron 从最终 `app.asar` 加载 `electron-updater.autoUpdater`，加载失败则整个打包失败。正式目录布局把整个便携目录放在 DSH 根的 `client-launcher` 子目录；`DSH_DESKTOP_RUNTIME_DIR` 只用于开发或诊断时显式覆盖当前 DSH。
+`package:portable` 把编译后的启动器及 `electron-updater` 的最小生产依赖闭包放入 ASAR，不打入 DSH。依赖先在隔离暂存目录以 hoisted 布局安装，避免 pnpm Junction 与 Electron Packager 裁剪器的解析差异；打包完成后，脚本使用真实 Electron 从最终 `app.asar` 加载 `electron-updater.autoUpdater`，加载失败则整个打包失败。正式目录布局把整个便携目录放在 DSH 根的 `client-launcher` 子目录；`DSH_DESKTOP_RUNTIME_DIR` 只用于开发或诊断时显式覆盖当前 DSH，正式打包运行不覆盖 `DSH_HOME`。
 
 ## NSIS 正式安装器验证
 
 Electron Builder `26.15.3` 已作为安装器层接入，不替换当前经过验证的 `@electron/packager` 应用目录。`package:installer` 先重新生成具有正式产品名、应用标识、EXE 元数据和安装身份的便携目录，再用辅助模式 NSIS 包装；安装器不携带 DSH。
 
-`smoke:installer` 只接受显式的隔离 DSH checkout。门禁开始前会检查正式版和历史 Preview 进程，发现任一客户端仍运行时明确失败，不自动终止用户进程。当前门禁覆盖当前用户首次静默安装、同目录覆盖安装、两轮安装后启动、桌面及开始菜单快捷方式生成、卸载、快捷方式与注册项清理和异步自删除等待，并核对用户数据保留、DSH `package.json` 与锁文件摘要不变、Git 工作区状态回到安装前。安装后的前台 Agent 工具链也已单独通过。
+`smoke:installer` 只接受显式的隔离 DSH checkout；安装器 smoke 通过自动化 smoke 标志保持 `DSH_HOME` 隔离。门禁开始前会检查正式版和历史 Preview 进程，发现任一客户端仍运行时明确失败，不自动终止用户进程。当前门禁覆盖当前用户首次静默安装、同目录覆盖安装、两轮安装后启动、桌面及开始菜单快捷方式生成、卸载、快捷方式与注册项清理和异步自删除等待，并核对用户数据保留、DSH `package.json` 与锁文件摘要不变、Git 工作区状态回到安装前。安装后的前台 Agent 工具链也已单独通过。
 
 安装配置同时生成 `resources/app-update.yml`，正式打包版本由 `electron-updater` 使用该配置检查 GitHub 正式 Release；开发、便携和 smoke 会因未打包或显式禁用而跳过。`0.1.1` 起，正式安装器的前置便携打包必须通过最终 ASAR 更新器加载门禁；`0.1.0` 因缺少该依赖不能自行升级，需要用户手动覆盖安装一次。发布必须同时上传正式 `latest.yml`、安装器和 blockmap；当前安装器未签名，真实升级下载、重启安装和失败恢复仍需单独验证。
 
@@ -53,9 +53,9 @@ Electron Builder `26.15.3` 已作为安装器层接入，不替换当前经过�
 1. 跟进 Workspace write 下官方 ACL runner 与 ConPTY 的启动兼容性；在该组合可用前，不把受限持久终端计入发布能力。
 2. 验证真实用户操作、长时间托盘驻留、睡眠恢复和系统关机退出。
 3. 人工复核新版错误目录恢复操作；错误目录快速失败与严格目录边界已经通过，正确目录结构、打开当前安装位置和退出按钮已由单元测试覆盖。正常目录的辅助安装范围选择、目录选择和真实启动已经通过，快捷方式生命周期由自动化门禁覆盖。
-4. 继续验证多客户端切换、默认客户端失效恢复和独立 `DSH_HOME` 的长期使用路径；首次配置与默认客户端自动直达已经完成人工验证。
+4. 继续验证多客户端切换、默认客户端失效恢复，以及多个 Harness 使用同一默认 `DSH_HOME` 时的版本兼容和并发访问；首次配置与默认客户端自动直达已经完成人工验证。
 5. 完成代码签名、公开 feed 的真实升级回归、更新失败回滚和版本兼容策略；自动检查与下载代码及正式更新配置已经接入。
 
 完整的安装、首次使用、升级、卸载和问题处理步骤见 [客户端启动器使用说明](./client-launcher-usage.md)；本轮曾发现的内嵌脚本语法错误和安装版 `poc` 目录缺失问题也已记录在该文档中。
 
-正式发布不代表代码签名、真实在线升级回归或正式 `DSH_HOME` 共享已经完成。
+正式发布不代表代码签名、真实在线升级回归或更新失败回滚已经完成；正式包使用 Harness 自己解析的 `DSH_HOME`，源码和 smoke 的隔离策略不代表生产运行策略。

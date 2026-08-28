@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createEmptyRuntimeClientRegistry, parseRuntimeClientRegistry } from '../runtime-clients.js'
+import { resolveRuntimeHomeMode } from '../runtime-home.js'
+
+test('packaged release uses Harness home while source and smoke stay isolated', () => {
+  assert.equal(resolveRuntimeHomeMode(true, false), 'harness-default')
+  assert.equal(resolveRuntimeHomeMode(true, true), 'poc-isolated')
+  assert.equal(resolveRuntimeHomeMode(false, false), 'poc-isolated')
+})
 
 test('empty launcher registry represents first launch', () => {
   assert.deepEqual(createEmptyRuntimeClientRegistry(), { version: 1, clients: [] })

@@ -93,8 +93,14 @@ function installDesktopChrome(): void {
       position: fixed; inset: 0 0 auto 0; z-index: 2147483646;
       height: ${DESKTOP_TITLE_BAR_HEIGHT}px; box-sizing: border-box;
       -webkit-app-region: drag;
-      display: flex; align-items: flex-start; justify-content: flex-end;
+      display: flex; align-items: flex-start; justify-content: space-between;
       color: var(--dsh-desktop-titlebar-foreground, rgb(245, 245, 245));
+    }
+    #dsh-desktop-runtime-label {
+      min-width: 0; height: ${DESKTOP_TITLE_BAR_HEIGHT}px; box-sizing: border-box;
+      display: flex; align-items: center; padding: 0 12px;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      font: 12px/1.2 system-ui, sans-serif; opacity: .72;
     }
     #dsh-desktop-window-controls {
       -webkit-app-region: no-drag;
@@ -128,6 +134,9 @@ function installDesktopChrome(): void {
   `
   const titleBar = document.createElement('div')
   titleBar.id = 'dsh-desktop-titlebar'
+  const runtimeLabel = document.createElement('div')
+  runtimeLabel.id = 'dsh-desktop-runtime-label'
+  runtimeLabel.textContent = '当前客户端：正在确认…'
   const controls = document.createElement('div')
   controls.id = 'dsh-desktop-window-controls'
   controls.setAttribute('role', 'toolbar')
@@ -144,9 +153,17 @@ function installDesktopChrome(): void {
       <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.25 2.25 7.5 7.5m0-7.5-7.5 7.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
     </button>
   `
-  titleBar.append(controls)
+  titleBar.append(runtimeLabel, controls)
   document.head.append(style)
   document.body.append(titleBar)
+  void ipcRenderer.invoke('dsh-desktop:active-runtime').then((value: unknown) => {
+    if (typeof value !== 'object' || value === null) return
+    const name = Reflect.get(value, 'name')
+    const root = Reflect.get(value, 'root')
+    if (typeof name !== 'string' || typeof root !== 'string') return
+    runtimeLabel.textContent = `当前客户端：${name}`
+    runtimeLabel.title = root
+  })
 
   const minimizeButton = controls.querySelector<HTMLButtonElement>('#dsh-desktop-window-minimize')
   const maximizeButton = controls.querySelector<HTMLButtonElement>('#dsh-desktop-window-maximize')

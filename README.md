@@ -6,7 +6,7 @@ DeepSeek Harness 的独立 Windows 客户端启动器。启动器安装在 DSH �
 
 ## 当前发布状态
 
-- 当前正式版本：`0.1.1`。
+- 当前正式版本：`0.1.2`。
 - 兼容基线：Windows 11 x64、Electron `43.4.0`、DeepSeek Harness `0.1.1-rc.2`。
 - 已完成：目录内 DSH 定位、显式源码构建、随机回环 Host、托盘与单实例、窗口状态、原生目录选择、自绘标题栏和主题/皮肤颜色同步。
 - 已完成启动器基础：首次启动显示 DSH 客户端选择页，可手动添加多个 DSH；启动前重新检测，默认客户端有效时后续直接进入。
@@ -19,7 +19,7 @@ DeepSeek Harness 的独立 Windows 客户端启动器。启动器安装在 DSH �
 
 - 启动器源码开发基线固定为 `@deepseek-ai/dsh@0.1.1-rc.2`；打包后的启动器使用所在目录的当前 DSH，并在启动日志报告实际版本。
 - 不修改 DeepSeek Harness 官方源码。
-- 开发运行数据固定写入 `.poc/`，不接触用户正式 Harness home。
+- 开发运行和 smoke 数据固定写入 `.poc/`；正式打包运行不注入 `DSH_HOME`，由 Harness 按继承环境或 `~/.dsh` 自己解析正式数据目录。
 - Electron Renderer 关闭 Node 集成，启用上下文隔离和沙箱。
 - Host 只绑定 `127.0.0.1` 和系统分配端口。
 - Electron 启动器位于 `app.asar`，默认把 EXE 目录的上一级识别为当前 DSH 根；不携带或回退内置 DSH。
@@ -84,13 +84,13 @@ deepseek-harness/
    └─ resources/app.asar
 ```
 
-双击 `dsh-client-launcher.exe` 后，启动器只检查上一级 DSH；缺少依赖或构建产物时显示客户端选择/恢复页，不搜索其他安装、不启动外部 `dsh web`，也不回退内置副本。便携运行数据写入 Electron 用户数据目录下的 `poc`，不会接入已有正式 `DSH_HOME`。
+双击 `dsh-client-launcher.exe` 后，启动器只检查上一级 DSH；缺少依赖或构建产物时显示客户端选择/恢复页，不搜索其他安装、不启动外部 `dsh web`，也不回退内置副本。源码和 smoke 的运行数据写入 Electron 用户数据目录下的 `poc`；正式打包运行不覆盖已有 `DSH_HOME`，由当前 DSH 自己使用继承环境或 `~/.dsh`。
 
 启动器只展示安装目录上一级候选和用户明确添加的目录，不扫描磁盘；选择结果保存在启动器隔离目录，移除客户端只删除启动器记录。
 
 生命周期 smoke 会连续启动 20 个隔离运行代，要求每次页面就绪、Cordis 完整释放、Electron 正常退出，并确认退出后本轮回环端口不可再访问。
 
-`smoke:agent-toolchain` 使用全新 DSH checkout 自带的官方无密钥模型 mock，启动真实便携 EXE，通过正式 HTTP API 注册工作区、创建并归组会话，再触发 Windows 标准预设实际公开的 `pwsh` 工具。工具经官方 Windows ACL 沙箱 runner 在会话工作区内写入并回读校验文件；验证随后检查持久化会话历史、真实 Renderer 可见结果、截图、Cordis 释放和回环端口关闭。设置 `DSH_DESKTOP_AGENT_TOOLCHAIN_SCENARIO=background` 时，同一门禁改走正式后台作业并检查返回的作业编号与异步文件结果；设置为 `cancel` 时启动长任务后走正式 `session.cancel`，要求中止结果可见且目标文件不会生成；设置为 `terminal` 时先通过正式 `settings.update` 把新会话权限设为 `danger-full-access`，再选择官方 `minimal` 预设，通过 `node-pty` 支撑的持久 PowerShell 工具执行同一文件闭环，并验证活动 PTY 在桌面退出时正常释放。该命令只使用系统临时目录与随机端口，不读取或写入正式 `DSH_HOME`。
+`smoke:agent-toolchain` 使用全新 DSH checkout 自带的官方无密钥模型 mock，启动真实便携 EXE，通过正式 HTTP API 注册工作区、创建并归组会话，再触发 Windows 标准预设实际公开的 `pwsh` 工具。工具经官方 Windows ACL 沙箱 runner 在会话工作区内写入并回读校验文件；验证随后检查持久化会话历史、真实 Renderer 可见结果、截图、Cordis 释放和回环端口关闭。设置 `DSH_DESKTOP_AGENT_TOOLCHAIN_SCENARIO=background` 时，同一门禁改走正式后台作业并检查返回的作业编号与异步文件结果；设置为 `cancel` 时启动长任务后走正式 `session.cancel`，要求中止结果可见且目标文件不会生成；设置为 `terminal` 时先通过正式 `settings.update` 把新会话权限设为 `danger-full-access`，再选择官方 `minimal` 预设，通过 `node-pty` 支撑的持久 PowerShell 工具执行同一文件闭环，并验证活动 PTY 在桌面退出时正常释放。该命令使用独立 smoke 数据目录，不读取或写入正式 `DSH_HOME`。
 
 ## 当前状态
 

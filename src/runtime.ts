@@ -8,6 +8,7 @@ const SOURCE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const REQUIRED_PACKAGES = [
   '@deepseek-ai/dsh-app-boot',
   '@deepseek-ai/dsh-cmdline',
+  '@deepseek-ai/dsh-home-paths',
   '@deepseek-ai/dsh-launch-environment',
   '@deepseek-ai/dsh-host-webserver',
 ] as const

@@ -11,7 +11,7 @@ Electron main
   ├─ Profile 裸包解析适配
   ├─ Windows 目录选择请求的 Electron 原生适配
   ├─ 安装包自动更新协调器（仅在 app-update.yml 存在时启用）
-  ├─ app-boot + 隔离 desktop-poc Profile
+  ├─ app-boot + web Profile（源码/smoke 隔离，正式包使用 Harness 数据目录）
   │    ├─ @deepseek-ai/dsh-base
   │    ├─ @deepseek-ai/dsh-web-app
   │    ├─ 当前 DSH 自带的 config/agent-presets
@@ -20,7 +20,7 @@ Electron main
   └─ sandboxed BrowserWindow
 ```
 
-Electron 客户端启动器位于 Cordis 外，负责定位上一级 DSH、检查运行时、必要时由用户触发官方构建，再启动插件树。启动器通过当前 DSH 的安装锚点动态解析直接包；Profile 装配后注册可撤销的 Node 同步解析钩子，只为默认解析失败的裸包名使用 Profile 回退目录。Web Bundle 只声明 `agent-presets` 行，官方 CLI 还会把当前安装的 `config/agent-presets` 作为系统可信根注入该行；客户端启动器执行相同的启动器装配，且在 `standard/preset.yml` 缺失时直接终止启动，避免工作区可创建但会话无法创建。`src/plugin.ts` 位于 Cordis 内，只注册一个可撤销 effect，用来证明启动器自有能力能遵守官方插件生命周期。Agent、模型、会话、工具、权限和 Web 页面全部由当前目录的 Harness 提供。
+Electron 客户端启动器位于 Cordis 外，负责定位上一级 DSH、检查运行时、必要时由用户触发官方构建，再启动插件树。启动器通过当前 DSH 的安装锚点动态解析直接包；Profile 装配后注册可撤销的 Node 同步解析钩子，只为默认解析失败的裸包名使用 Profile 回退目录。插件树在启动时按官方顺序叠加 Bundle、Profile 用户补丁和 `$DSH_HOME/cordis.patch.yml` 全局用户补丁；Electron 内嵌 Host 无法安全使用依赖 Node 内部 ESM Loader 的官方 HMR，运行期直接编辑这两个文件后需重启启动器。启动器不主动覆盖 `DSH_TELEMETRY_DISABLED`，只对用户继承的显式退出设置应用官方禁用补丁。Web Bundle 只声明 `agent-presets` 行，官方 CLI 还会把当前安装的 `config/agent-presets` 作为系统可信根注入该行；客户端启动器执行相同的启动器装配，且在 `standard/preset.yml` 缺失时直接终止启动，避免工作区可创建但会话无法创建。`src/plugin.ts` 位于 Cordis 内，只注册一个可撤销 effect，用来证明启动器自有能力能遵守官方插件生命周期。Agent、模型、会话、工具、权限和 Web 页面全部由当前目录的 Harness 提供。
 
 安装包自动更新由 `src/auto-update.ts` 负责：启动器只在 Electron 已打包且 `resources/app-update.yml` 存在时延迟检查正式 GitHub feed；默认客户端检测通过后虽然会直接进入 DSH 页面，更新协调器仍在主进程继续运行，不依赖选择页可见。更新可用后由 `electron-updater` 自动下载，下载完成通过原生对话框请求用户确认重启安装。打包时在隔离暂存目录只安装自动更新器的生产依赖闭包，并用真实 Electron 从最终 `app.asar` 加载 `autoUpdater`；DSH 运行时仍由启动器所在目录的上一级提供。开发运行、便携包和 smoke 通过显式条件跳过网络检查。每个正式 Release 必须同时提供 `latest.yml`、安装器和 blockmap；代码签名和失败恢复仍是后续增强项。
 
@@ -32,7 +32,7 @@ DSH 的 Windows 原生目录选择器通过 `process.execPath` 启动 Node worke
 
 ## 数据所有权
 
-源码启动器强制覆盖当前进程的 `DSH_HOME`，固定写入仓库 `.poc/dsh-home`；Electron userData 固定写入 `.poc/electron-user-data`。便携包将两者写入 Electron 用户数据根，smoke 使用每轮独立目录。当前实现不支持共享用户正式 Harness home。
+源码运行和自动化 smoke 会显式把 `DSH_HOME` 指向 `.poc/runtimes/<客户端 ID>/dsh-home`，避免测试触碰用户数据。正式打包运行不覆盖 `DSH_HOME`：如果用户设置了环境变量，Harness 使用该目录；否则使用 Harness 默认的 `~/.dsh`。启动器自己的客户端注册表、窗口状态和自动更新缓存仍位于 Electron `userData/poc`，与 Harness 数据目录分开。
 
 ## 关闭顺序
 

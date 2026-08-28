@@ -31,3 +31,17 @@ export function createAgentPresetRootPatch(
     },
   }
 }
+
+/**
+ * Honor the official telemetry opt-out environment switch when its row exists.
+ * @param disabledEnv - Raw `DSH_TELEMETRY_DISABLED` environment value.
+ * @param rows - Profile rows composed before launcher-owned overlays.
+ * @returns Disable patch, or `undefined` when no opt-out patch is required.
+ */
+export function createTelemetryOptOutPatch(
+  disabledEnv: string | undefined,
+  rows: readonly ProfileRow[],
+): PatchOptions | undefined {
+  if ((disabledEnv ?? '') === '' || !rows.some(row => row.id === 'session-telemetry-otel')) return undefined
+  return { id: 'session-telemetry-otel', disabled: true }
+}

@@ -1,6 +1,6 @@
 # DSH 客户端启动器 Windows 安装器与发布流程
 
-> 状态：`0.1.1` 使用固定的正式产品身份、未签名 NSIS 安装器和 GitHub 正式更新通道；最终 ASAR 的自动更新器加载门禁与本机安装生命周期门禁已经通过，代码签名、从旧 Preview 迁移和真实在线升级回归尚未完成。
+> 状态：`0.1.2` 使用固定的正式产品身份、未签名 NSIS 安装器和 GitHub 正式更新通道；最终 ASAR 的自动更新器加载门禁与本机安装生命周期门禁已经通过，`0.1.1` 到 `0.1.2` 的真实在线升级在本版本公开后验证，代码签名和从旧 Preview 迁移尚未完成。
 
 ## 1. 目标与范围
 
@@ -29,7 +29,7 @@ Todo 项目已经验证“隔离候选包 → 本机试装 → CI 构建 → 草
 | 应用内容 | 应用自身完整运行时 | 只有启动器，DSH 仍由所在目录提供 |
 | 安装位置 | 独立应用目录 | 用户指定的 `DSH 根目录\client-launcher` |
 | 更新元数据 | Tauri `.sig` 与 `latest.json` | `electron-updater` 使用 Electron Builder 生成的 `latest.yml` |
-| 签名 | Tauri updater 签名与 Windows 代码签名分开 | `0.1.1` 尚未签名；后续接入 Windows Authenticode，自动更新信任链单独确认 |
+| 签名 | Tauri updater 签名与 Windows 代码签名分开 | `0.1.2` 尚未签名；后续接入 Windows Authenticode，自动更新信任链单独确认 |
 
 ## 3. 安装、升级与卸载不变式
 
@@ -50,7 +50,7 @@ Todo 项目已经验证“隔离候选包 → 本机试装 → CI 构建 → 草
 - 使用辅助安装模式，设置 `oneClick: false`，让用户明确确认安装位置。
 - 保留 Electron Builder 标准安装范围页，由用户选择“当前用户”或“所有用户”；“所有用户”按标准流程请求管理员权限。
 - 无论安装范围如何，安装器都只写入用户选择的 DSH 根目录下的 `client-launcher` 子目录；运行数据仍按当前 Windows 用户隔离。
-- 启动器首次启动进入客户端选择页。用户明确选择并启动某个 DSH 后保存默认客户端；后续启动前重新检测，检测通过才直接进入；不同客户端使用独立隔离的 `DSH_HOME`。
+- 启动器首次启动进入客户端选择页。用户明确选择并启动某个 DSH 后保存默认客户端；后续启动前重新检测，检测通过才直接进入。正式打包运行不覆盖 `DSH_HOME`，由当前 Harness 使用继承环境或 `~/.dsh`；源码和 smoke 才使用隔离 `DSH_HOME`。
 - 不采用 `nsis-web`；第一版安装器必须包含完整启动器载荷并支持离线安装。
 
 `@electron/packager` 便携构建已经通过真实 DSH 工具链门禁，因此安装器只包装重新生成的正式便携目录，不替换应用打包入口。安装后的 EXE 复用相同的便携 smoke 和 Agent 工具链验证，避免维护两个行为不同的应用产物。
@@ -133,6 +133,8 @@ pnpm.cmd run smoke:agent-toolchain
 pnpm.cmd run package:installer
 ```
 
+所有会执行 `clean` 或 `build` 的门禁必须串行运行；并行执行会同时删除和生成 `lib`，在 Windows 上产生 `EPERM`，该错误不代表应用生命周期失败。
+
 主要产物：
 
 - 便携目录：`.artifacts/portable/dsh-client-launcher-win32-x64/`
@@ -140,7 +142,7 @@ pnpm.cmd run package:installer
 - 正式安装器：`.artifacts/installer/DSH-Client-Launcher-<version>-x64-setup.exe`
 - 更新元数据：`.artifacts/installer/latest.yml` 与同名安装器 `.blockmap`
 
-`0.1.1` 安装器大小为 `100,061,903` 字节，SHA-256 为 `69D22DF1ACCCBD4D19686FA081DBC9B746D53F728A8FE498E239A565A3506B27`。`0.1.0` 的历史安装器保持不变，但因未携带自动更新器依赖不能自行升级到本版本。
+`0.1.2` 安装器大小为 `100,063,722` 字节，SHA-256 为 `07E318B88BC5A1555D34F95E630BDF0CE18B4A6298658F74B9DCF5D45615FD9A`。`latest.yml`、安装器和 blockmap 的版本与文件名一致。`0.1.0` 的历史安装器因未携带自动更新器依赖不能自行升级；`0.1.1` 保留为本次真实 GitHub 自动更新测试起点。
 
 安装器生命周期验证只接受显式隔离的全新 DSH checkout：
 
@@ -150,6 +152,8 @@ pnpm.cmd run smoke:installer
 ```
 
 该 smoke 会先拒绝任何仍在运行的新旧启动器进程，再覆盖当前用户首次安装、同目录覆盖安装、安装后启动、快捷方式、卸载、注册项清理、用户数据保留以及 DSH 文件边界校验。所有用户范围、非静默目录选择和错误目录恢复页仍需要人工复核。
+
+机器上已经安装正式产品且需要保留该版本进行真实自动更新时，不运行同产品身份的安装器生命周期 smoke；它会改写正式卸载注册项和快捷方式。此时复用上一版本已通过的 NSIS 生命周期证据，并要求本版本通过最终 ASAR 更新器加载、便携运行、资产摘要和公开 Release 资产校验。
 
 ## 8. 实现阶段
 

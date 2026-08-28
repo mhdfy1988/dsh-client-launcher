@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-28
+
+### Added
+
+- 主窗口标题栏和托盘菜单始终显示当前连接的 Harness 名称，标题栏悬停可查看完整目录，自动直达后也能确认实际启动目标。
+
+### Changed
+
+- 正式打包运行不再覆盖 `DSH_HOME`，由 DeepSeek Harness 按继承环境或 `~/.dsh` 使用用户原有的插件、技能、凭据和会话数据；源码开发与自动化 smoke 仍保持隔离数据目录。
+
+### Fixed
+
+- 启动器改为装载当前 Harness 的 `web` Profile，正式 `DSH_HOME` 中已安装的技能管理器、皮肤和 Codex Auth 等插件会随 Profile 一起加载。
+- 启动器按官方顺序同时加载 Profile 层和 `$DSH_HOME/cordis.patch.yml` 全局用户补丁，避免桌面启动遗漏机器级配置。
+- 移除早期 POC 强制写入的 `DSH_TELEMETRY_DISABLED=1`；启动器现在只在用户显式设置该环境变量时，按 DSH 官方规则禁用遥测行。
+- 分层环境改为先加载所选 Harness 根 `.env` 和 `DSH_HOME/.env`，再组合 Profile，与官方 `dsh web` 的配置取值时序一致。
+- 启动诊断改为读取启动器自身清单版本，避免开发模式把 Electron 版本误报为启动器版本。
+
 ## [0.1.1] - 2026-08-28
 
 ### Fixed
@@ -62,6 +80,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - 修复便携包 smoke 把临时运行数据写入交付目录且未清理的问题；验证数据改用系统临时目录并在结束时统一删除。
 - 修复沙箱 preload 使用 ESM 输出而未执行的问题，并在构建前清理旧产物，避免源码改名后继续加载陈旧文件。
 
-[Unreleased]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mhdfy1988/dsh-desktop-shell/releases/tag/v0.1.0

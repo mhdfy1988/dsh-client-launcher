@@ -35,9 +35,15 @@ import {
 } from './runtime-clients.js'
 import { applyWindowControl } from './window-controls.js'
 import { installAutoUpdate, type AutoUpdateHandle } from './auto-update.js'
+import { resolveRuntimeHomeMode } from './runtime-home.js'
 
 const BIN_NAME = 'dsh-desktop-shell'
 const PROJECT_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+const DESKTOP_VERSION = (() => {
+  const version = (JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf8')) as { version?: unknown }).version
+  if (typeof version !== 'string' || version === '') throw new Error('desktop package manifest has no version')
+  return version
+})()
 const DEFAULT_USER_DATA = app.getPath('userData')
 const PACKAGED_DATA_ROOT = process.env.DSH_DESKTOP_POC_PACKAGED_DATA_ROOT ?? DEFAULT_USER_DATA
 const POC_ROOT = app.isPackaged ? join(PACKAGED_DATA_ROOT, 'poc') : join(PROJECT_ROOT, '.poc')
@@ -46,6 +52,9 @@ const WINDOW_STATE = join(USER_DATA, 'window-state.json')
 const RUNTIME_CLIENTS = join(POC_ROOT, 'runtime-clients.json')
 const smokeDelay = Number.parseInt(process.env.DSH_DESKTOP_POC_SMOKE_MS ?? '', 10)
 const smokeMode = Number.isFinite(smokeDelay) && smokeDelay >= 0
+// Source runs and explicit smoke runs stay isolated; a packaged release lets
+// Harness resolve its own DSH_HOME from the inherited environment or ~/.dsh.
+const runtimeHomeMode = resolveRuntimeHomeMode(app.isPackaged, smokeMode)
 const traceFile = join(POC_ROOT, 'desktop-startup.log')
 const DESKTOP_ICON = fileURLToPath(new URL('../assets/dsh-desktop-icon.ico', import.meta.url))
 
@@ -59,11 +68,11 @@ function trace(message: string): void {
 mkdirSync(POC_ROOT, { recursive: true })
 mkdirSync(USER_DATA, { recursive: true })
 app.setPath('userData', USER_DATA)
-process.env.DSH_TELEMETRY_DISABLED = '1'
 
 let host: Context | undefined
 let window: BrowserWindow | undefined
 let tray: Tray | undefined
+let activeRuntimeClient: RuntimeClientRecord | undefined
 let nativeExitStarted = false
 let relaunchRequested = false
 let runtimeBuildActive = false
@@ -311,6 +320,10 @@ function publishWindowState(target: BrowserWindow): void {
 }
 
 function installWindowControlHandler(): void {
+  ipcMain.handle('dsh-desktop:active-runtime', (event: IpcMainInvokeEvent) => {
+    if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) return undefined
+    return activeRuntimeClient
+  })
   ipcMain.on('dsh-desktop:window-control', (event: IpcMainEvent, command: unknown) => {
     if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) return
     const maximized = applyWindowControl(window, command)
@@ -332,8 +345,11 @@ function showWindow(): void {
 
 function installTray(): void {
   tray = new Tray(nativeImage.createFromPath(DESKTOP_ICON))
-  tray.setToolTip('DSH 客户端启动器')
+  const runtimeLabel = activeRuntimeClient?.name ?? '未选择客户端'
+  tray.setToolTip(`DSH 客户端启动器 · ${runtimeLabel}`)
   tray.setContextMenu(Menu.buildFromTemplate([
+    { label: `当前客户端：${runtimeLabel}`, enabled: false },
+    { type: 'separator' },
     { label: '显示 DSH 客户端启动器', click: showWindow },
     { label: '重启 Host', click: requestRestart },
     { type: 'separator' },
@@ -481,9 +497,11 @@ async function start(): Promise<void> {
     return
   }
   process.env.DSH_DESKTOP_RUNTIME_DIR = automaticRoot
-  const runtimeDshHome = join(POC_ROOT, 'runtimes', runtimeClientId(automaticRoot), 'dsh-home')
-  mkdirSync(runtimeDshHome, { recursive: true })
-  process.env.DSH_HOME = runtimeDshHome
+  const isolatedDshHome = join(POC_ROOT, 'runtimes', runtimeClientId(automaticRoot), 'dsh-home')
+  if (runtimeHomeMode === 'poc-isolated') {
+    mkdirSync(isolatedDshHome, { recursive: true })
+    process.env.DSH_HOME = isolatedDshHome
+  }
   let runtime = inspectHarnessRuntime(automaticRoot)
   if (!runtime.ready && process.env.DSH_DESKTOP_POC_AUTO_BUILD === '1' && runtime.canBuild) {
     const buildResult = await buildHarnessWorkspace(runtime.root)
@@ -496,20 +514,32 @@ async function start(): Promise<void> {
     return
   }
   if (!runtime.ready) throw new HarnessRuntimeNotReadyError(runtime)
-  const [{ boot, loadLayeredEnv }, { provideCmdline }, { DSH_LAUNCH_ENVIRONMENT_KEY }] = await Promise.all([
+  const configuredClient = readRuntimeClients().clients.find(client => client.root === runtime.root)
+  activeRuntimeClient = {
+    id: runtimeClientId(runtime.root),
+    name: configuredClient?.name ?? basename(runtime.root),
+    root: runtime.root,
+  }
+  const [{ boot, loadLayeredEnv }, { provideCmdline }, { DSH_LAUNCH_ENVIRONMENT_KEY }, { resolveDshHome }] = await Promise.all([
     importHarnessPackage<typeof import('@deepseek-ai/dsh-app-boot')>('@deepseek-ai/dsh-app-boot'),
     importHarnessPackage<typeof import('@deepseek-ai/dsh-cmdline')>('@deepseek-ai/dsh-cmdline'),
     importHarnessPackage<typeof import('@deepseek-ai/dsh-launch-environment')>('@deepseek-ai/dsh-launch-environment'),
+    importHarnessPackage<typeof import('@deepseek-ai/dsh-home-paths')>('@deepseek-ai/dsh-home-paths'),
     importHarnessPackage<typeof import('@deepseek-ai/dsh-host-webserver')>('@deepseek-ai/dsh-host-webserver'),
   ])
+  const runtimeDshHome = runtimeHomeMode === 'poc-isolated' ? isolatedDshHome : resolveDshHome()
+  mkdirSync(runtimeDshHome, { recursive: true })
+  const environment = loadLayeredEnv(BIN_NAME, runtime.root)
   const dshVersion = readHarnessVersion()
   if (process.platform === 'win32') app.setAppUserModelId('local.dsh.client.launcher')
   process.stdout.write(`DSH_DESKTOP_POC_RUNTIME ${JSON.stringify({
-    desktop: '0.1.1',
+    desktop: DESKTOP_VERSION,
     electron: process.versions.electron,
     node: process.versions.node,
     modules: process.versions.modules,
     dsh: dshVersion,
+    homeMode: runtimeHomeMode,
+    dshHome: runtimeDshHome,
   })}\n`)
 
   if (process.env.DSH_DESKTOP_POC_FORCE_BOOT_FAILURE === '1') {
@@ -523,7 +553,6 @@ async function start(): Promise<void> {
   electronNodePtyCompatibility = installElectronNodePtyCompatibility(runtimeNodePty)
   removeModuleFallback = installHarnessModuleFallback(prepared.bareModuleBaseUrl)
   trace('profile-prepared')
-  const environment = loadLayeredEnv(BIN_NAME, runtime.root)
   host = await boot(
     BIN_NAME,
     prepared.rootConfig,

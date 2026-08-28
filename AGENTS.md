@@ -4,7 +4,7 @@
 
 - 禁止直接修改或复制后改写 `D:\deepseek\deepseek-harness-master` 的源码。
 - Harness 只通过已发布 npm 包、公开导出、Profile、Bundle、Service 和 Client 扩展点接入。
-- 源码 POC 使用仓库 `.poc` 下的隔离数据目录；打包产物使用 Electron `userData/poc`，两者都不读取或写入用户正式 `DSH_HOME`。
+- 源码开发和自动化 smoke 使用仓库或 Electron `userData/poc` 下的隔离数据目录；正式打包运行不注入 `DSH_HOME`，由 Harness 按继承环境或 `~/.dsh` 自己解析用户数据目录。
 - 一个 Electron 进程只能拥有一个活动 Cordis Host；退出必须先释放 Cordis tree，再退出 Electron。
 - Host 只绑定 `127.0.0.1` 与操作系统分配端口，不得监听 `0.0.0.0`。
 - 不允许用外部 `dsh web`、无沙箱 PowerShell或强制杀进程作为静默回退。

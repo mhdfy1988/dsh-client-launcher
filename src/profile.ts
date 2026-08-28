@@ -4,11 +4,14 @@ import { pathToFileURL } from 'node:url'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import type { Profile } from '@deepseek-ai/dsh-app-boot'
 import { importHarnessPackage, resolveHarnessPackageJson } from './runtime.js'
-import { createAgentPresetRootPatch } from './profile-overlays.js'
+import { createAgentPresetRootPatch, createTelemetryOptOutPatch } from './profile-overlays.js'
 
 const BIN_NAME = 'dsh-desktop-shell'
-const PROFILE_NAME = 'desktop-poc'
+// Use the selected Harness Web profile so its installed plugins and user patch
+// layer remain part of the launched tree.
+const PROFILE_NAME = 'web'
 const ROOT_CONFIG_NAME = 'cordis.yml'
+const HOME_PATCH_NAME = 'cordis.patch.yml'
 
 /** Official Profile inputs consumed by one POC Host generation. */
 export interface PreparedProfile {
@@ -23,8 +26,8 @@ export interface PreparedProfile {
 }
 
 /**
- * Initialize and compose the isolated Web profile used by the POC.
- * @param homeDir - isolated Harness home owned by this POC.
+ * Initialize and compose the Web profile used by the launcher.
+ * @param homeDir - resolved Harness home for the current launch.
  * @returns official Loader inputs with a final loopback-only overlay.
  */
 export async function prepareProfile(homeDir: string): Promise<PreparedProfile> {
@@ -32,6 +35,7 @@ export async function prepareProfile(homeDir: string): Promise<PreparedProfile> 
     composeEntries,
     healProfilesModuleFallback,
     initProfile,
+    loadOptionalPatches,
     loadProfile,
     PROFILE_TEMPLATES,
     resolveProfileDir,
@@ -52,15 +56,21 @@ export async function prepareProfile(homeDir: string): Promise<PreparedProfile> 
   const rootConfig = join(profile.dir, ROOT_CONFIG_NAME)
   writeFileSync(rootConfig, '[]\n', 'utf8')
 
-  const patches: PatchOptions[] = []
-  for (const layer of profile.layers) patches.push(...layer.patches)
-  patches.push(...profile.patches)
+  const bundlePatches = profile.layers.flatMap(layer => layer.patches)
+  const homePatchPath = join(homeDir, HOME_PATCH_NAME)
+  const initialUserPatches = [
+    ...profile.patches,
+    ...loadOptionalPatches(BIN_NAME, homePatchPath) ?? [],
+  ]
   const shippedPresetRoot = join(dirname(installAnchor), 'config', 'agent-presets')
   if (!existsSync(join(shippedPresetRoot, 'standard', 'preset.yml'))) {
     throw new Error(`${BIN_NAME}: selected DSH installation has no shipped standard preset at ${shippedPresetRoot}`)
   }
-  patches.push(createAgentPresetRootPatch(composeEntries([patches]), shippedPresetRoot))
-  patches.push(
+  const composedRows = composeEntries([[...bundlePatches, ...initialUserPatches]])
+  const launcherOverlays: PatchOptions[] = [createAgentPresetRootPatch(composedRows, shippedPresetRoot)]
+  const telemetryPatch = createTelemetryOptOutPatch(process.env.DSH_TELEMETRY_DISABLED, composedRows)
+  if (telemetryPatch !== undefined) launcherOverlays.push(telemetryPatch)
+  launcherOverlays.push(
     {
       insert: [
         {
@@ -85,11 +95,14 @@ export async function prepareProfile(homeDir: string): Promise<PreparedProfile> 
       },
     },
   )
-
   return {
     profile,
     rootConfig,
     bareModuleBaseUrl: pathToFileURL(join(profile.dir, 'package.json')).href,
-    patches,
+    patches: structuredClone([
+      ...bundlePatches,
+      ...initialUserPatches,
+      ...launcherOverlays,
+    ]),
   }
 }

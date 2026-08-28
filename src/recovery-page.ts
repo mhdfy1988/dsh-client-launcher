@@ -41,7 +41,7 @@ export function renderRecoveryPage(options: RecoveryPageOptions): string {
   </style>
 </head>
 <body><div id="root">
-  <aside><div class="brand">DSH <span>启动器</span></div><p class="aside-copy">选择要启动的 DeepSeek Harness。</p><div class="invariant">不扫描磁盘<br>不修改 DSH 和插件</div></aside>
+  <aside><div class="brand">DSH <span>启动器</span></div><p class="aside-copy">选择要启动的 DeepSeek Harness。</p><div class="invariant">不扫描磁盘<br>不修改 DSH 源码和插件</div></aside>
   <main><div class="topline"><h1>选择要启动的 DSH</h1><button class="add" id="add">添加客户端</button></div>${failure}<div id="status" role="status"></div><div class="client-list" id="clients"><div class="empty">正在检测客户端……</div></div></main>
 </div>
 <script>
