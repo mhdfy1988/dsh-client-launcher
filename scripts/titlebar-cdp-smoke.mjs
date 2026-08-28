@@ -40,6 +40,7 @@ async function evaluate(expression) {
 const controls = await evaluate(`(() => {
   const titleBar = document.querySelector('#dsh-desktop-titlebar')
   const runtimeLabel = document.querySelector('#dsh-desktop-runtime-label')
+  const updateStatus = document.querySelector('#dsh-desktop-update-status')
   const buttons = [...document.querySelectorAll('.dsh-desktop-window-button')]
   if (!(titleBar instanceof HTMLElement)) return null
   const style = getComputedStyle(titleBar)
@@ -50,10 +51,12 @@ const controls = await evaluate(`(() => {
     height: titleBar.getBoundingClientRect().height,
     runtimeLabel: runtimeLabel?.textContent,
     runtimePath: runtimeLabel?.getAttribute('title'),
+    updateStatusHidden: updateStatus instanceof HTMLElement ? updateStatus.hidden : null,
   }
 })()`)
 if (controls === null || controls.height !== 36 || controls.buttonIds.length !== 3
-  || !controls.runtimeLabel?.startsWith('当前客户端：') || controls.runtimePath === '') {
+  || !controls.runtimeLabel?.startsWith('当前客户端：') || controls.runtimePath === ''
+  || controls.updateStatusHidden !== true) {
   throw new Error(`Invalid desktop controls: ${JSON.stringify(controls)}`)
 }
 

@@ -4,7 +4,7 @@
 
 - 日期：2026-08-28
 - 仓库：`D:\deepseek\dsh-desktop-shell`
-- 客户端启动器：`0.1.2`
+- 客户端启动器：`0.1.3`
 - Electron：`43.4.0`
 - Electron 内置 Node：`24.18.1`
 - Node modules ABI：`148`
@@ -31,7 +31,7 @@
 | 工作区选择与会话创建 | 通过 | 客户端启动器从当前 DSH 注入 `config/agent-presets`；真实点击 `test` 后装载 `standard` 预设并创建空白会话，控制台无 `agent-preset-not-found` |
 | 自绘标题栏与主题跟随 | 通过 | 沙箱 preload 读取 DSH 设计变量并发出主题事件；无边框窗口的自绘三键使用同一文字和强调色，支持拖动、双击最大化及最大化/还原状态同步，拖动区不绘制额外分隔线 |
 | 第三方皮肤标题栏跟随 | 通过（`0.1.1`） | 在隔离数据目录中的 `web` 配置档案实测“梦境仙游”浅色、“虚空低语”`rgb(13, 17, 20)` 和 Harness 默认 `rgb(255, 255, 255)` 三条路径的页面与标题栏最终颜色一致；`0.1.2` 已通过官方插件流程安装，等待当前窗口下次重启后人工复核 |
-| 自动更新配置与安装器资源 | 通过（代码与正式安装包） | `electron-updater` 仅在已打包且存在 `resources/app-update.yml` 时启用；正式安装器资源包含 GitHub Release 配置并生成对应 `latest.yml`；最终 `app.asar` 已由真实 Electron 加载 `autoUpdater`，开发、便携和 smoke 跳过网络检查；代码签名、真实下载重启和回滚仍未完成 |
+| 自动更新配置与安装器资源 | 通过（代码、正式安装包与在线升级） | `electron-updater` 仅在已打包且存在 `resources/app-update.yml` 时启用；`0.1.1` 已通过 GitHub 正式通道下载并重启安装到 `0.1.2`；`0.1.3` 增加标题栏检查、下载进度、完成和失败状态，最终 `app.asar` 继续执行更新器加载门禁；代码签名和失败回滚仍未完成 |
 | 当前 Harness 可见性 | 通过（`0.1.2`） | 自定义标题栏显示当前 Harness 名称，悬停显示完整目录；托盘菜单显示同一名称，真实渲染 smoke 已验证 |
 | 便携 Agent 工具链 | 通过 | 全新 DSH checkout 的官方无密钥模型 mock → 真实便携 EXE → `workspace.create` → 带 `workspaceId` 的 `session.create` → `session.prompt` → Windows ACL 沙箱 runner → 前台/后台 `pwsh` 与正式 `session.cancel` → 工作区文件或中止结果 → 会话历史与 Renderer → Host 释放和端口关闭 |
 | 持久 PowerShell 终端 | Full access 通过 | 正式 `settings.update` → `danger-full-access` → 官方 `minimal` 预设 → `node-pty` 持久 `pwsh` → 文件写入回读 → 会话历史与 Renderer → 活动 PTY 正常退出 → Host 释放和端口关闭 |
@@ -105,4 +105,4 @@ No peer dependency issues found
 - 尚未实现 Profile 切换和正式插件安装；窗口与托盘生命周期的首个源码切片已完成。
 - 尚未完成代码签名、使用更高公开版本的真实升级下载/重启和更新失败回滚；正式安装器覆盖安装流程已通过。
 
-因此当前结论为：`0.1.2` 恢复正式 Harness 的默认数据目录与完整 Web Profile 配置，自动直达后明确显示当前 Harness，并继续满足本机源码、便携、工具链和安装器门禁；`0.1.0` 用户仍需先手动覆盖安装 `0.1.1` 或更高版本。`0.1.1` 到 `0.1.2` 的真实在线升级在本版本公开后执行，代码签名、更新失败回滚、Workspace write 持久终端和长期运行验证继续作为后续限制。
+因此当前结论为：`0.1.3` 在 `0.1.2` 恢复正式数据和配置的基础上补充可见的自动更新状态，并继续满足本机源码、真实渲染和更新协调器门禁；`0.1.1` 到 `0.1.2` 的 GitHub 在线下载与重启安装已经通过。`0.1.0` 用户仍需先手动覆盖安装 `0.1.1` 或更高版本，代码签名、更新失败回滚、Workspace write 持久终端和长期运行验证继续作为后续限制。

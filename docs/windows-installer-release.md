@@ -1,6 +1,6 @@
 # DSH 客户端启动器 Windows 安装器与发布流程
 
-> 状态：`0.1.2` 使用固定的正式产品身份、未签名 NSIS 安装器和 GitHub 正式更新通道；最终 ASAR 的自动更新器加载门禁与本机安装生命周期门禁已经通过，`0.1.1` 到 `0.1.2` 的真实在线升级在本版本公开后验证，代码签名和从旧 Preview 迁移尚未完成。
+> 状态：`0.1.3` 使用固定的正式产品身份、未签名 NSIS 安装器和 GitHub 正式更新通道；最终 ASAR 的自动更新器加载门禁与本机安装生命周期门禁已经通过，`0.1.1` 到 `0.1.2` 的真实在线下载和重启安装已经通过，`0.1.3` 增加标题栏更新进度，代码签名和从旧 Preview 迁移尚未完成。
 
 ## 1. 目标与范围
 
@@ -29,7 +29,7 @@ Todo 项目已经验证“隔离候选包 → 本机试装 → CI 构建 → 草
 | 应用内容 | 应用自身完整运行时 | 只有启动器，DSH 仍由所在目录提供 |
 | 安装位置 | 独立应用目录 | 用户指定的 `DSH 根目录\client-launcher` |
 | 更新元数据 | Tauri `.sig` 与 `latest.json` | `electron-updater` 使用 Electron Builder 生成的 `latest.yml` |
-| 签名 | Tauri updater 签名与 Windows 代码签名分开 | `0.1.2` 尚未签名；后续接入 Windows Authenticode，自动更新信任链单独确认 |
+| 签名 | Tauri updater 签名与 Windows 代码签名分开 | `0.1.3` 尚未签名；后续接入 Windows Authenticode，自动更新信任链单独确认 |
 
 ## 3. 安装、升级与卸载不变式
 
@@ -142,7 +142,7 @@ pnpm.cmd run package:installer
 - 正式安装器：`.artifacts/installer/DSH-Client-Launcher-<version>-x64-setup.exe`
 - 更新元数据：`.artifacts/installer/latest.yml` 与同名安装器 `.blockmap`
 
-`0.1.2` 安装器大小为 `100,063,722` 字节，SHA-256 为 `07E318B88BC5A1555D34F95E630BDF0CE18B4A6298658F74B9DCF5D45615FD9A`。`latest.yml`、安装器和 blockmap 的版本与文件名一致。`0.1.0` 的历史安装器因未携带自动更新器依赖不能自行升级；`0.1.1` 保留为本次真实 GitHub 自动更新测试起点。
+`0.1.3` 安装器大小为 `100,065,398` 字节，SHA-256 为 `FC18685290BA229628CD116958A025610EA27C5C58C2D38829057446F3E6E65C`。`latest.yml`、安装器和 blockmap 的版本与文件名一致。`0.1.0` 的历史安装器因未携带自动更新器依赖不能自行升级；`0.1.1` 到 `0.1.2` 的真实在线更新已通过，`0.1.2` 保留为本次标题栏进度更新测试起点。
 
 安装器生命周期验证只接受显式隔离的全新 DSH checkout：
 

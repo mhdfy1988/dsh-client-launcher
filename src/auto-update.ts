@@ -21,6 +21,14 @@ export interface AutoUpdateAvailability {
   readonly env: NodeJS.ProcessEnv
 }
 
+/** User-visible state projected from the packaged updater lifecycle. */
+export type AutoUpdateStatus =
+  | { readonly phase: 'idle' }
+  | { readonly phase: 'checking' }
+  | { readonly phase: 'downloading'; readonly version: string; readonly percent: number }
+  | { readonly phase: 'downloaded'; readonly version: string }
+  | { readonly phase: 'error'; readonly message: string }
+
 /** Return whether a release feed is configured for this packaged application. */
 export function shouldEnableAutoUpdate(options: AutoUpdateAvailability): boolean {
   return options.isPackaged
@@ -37,6 +45,8 @@ export interface AutoUpdateDependencies {
   readonly showMessageBox?: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
   /** Diagnostic sink. */
   readonly log?: (message: string) => void
+  /** Publish one user-visible lifecycle state. */
+  readonly onStatus?: (status: AutoUpdateStatus) => void
   /** Timer implementation. */
   readonly setTimeout?: typeof setTimeout
   /** Timer cleanup implementation. */
@@ -45,6 +55,8 @@ export interface AutoUpdateDependencies {
 
 /** Handle returned by the automatic update coordinator. */
 export interface AutoUpdateHandle {
+  /** Reopen the install confirmation after an update has downloaded. */
+  requestInstall(): boolean
   /** Cancel the pending check and detach updater listeners. */
   dispose(): void
 }
@@ -72,9 +84,10 @@ export function installAutoUpdate(
   options: AutoUpdateAvailability,
   dependencies: AutoUpdateDependencies = {},
 ): AutoUpdateHandle {
-  if (!shouldEnableAutoUpdate(options)) return { dispose() {} }
+  if (!shouldEnableAutoUpdate(options)) return { requestInstall: () => false, dispose() {} }
   const updater = dependencies.updater ?? (require('electron-updater') as { autoUpdater: AppUpdater }).autoUpdater
   const log = dependencies.log ?? defaultLogger
+  const publishStatus = dependencies.onStatus ?? (() => {})
   const showMessageBox = dependencies.showMessageBox ?? ((options: MessageBoxOptions) => {
     const electron = require('electron') as { dialog: { showMessageBox: (value: MessageBoxOptions) => Promise<MessageBoxReturnValue> } }
     return electron.dialog.showMessageBox(options)
@@ -82,23 +95,41 @@ export function installAutoUpdate(
   const schedule = dependencies.setTimeout ?? setTimeout
   const clear = dependencies.clearTimeout ?? clearTimeout
   let installPromptOpen = false
+  let availableVersion = '新版本'
+  let downloadedVersion: string | undefined
 
   updater.autoDownload = true
   updater.autoInstallOnAppQuit = false
 
-  const onChecking = (): void => { log('checking') }
-  const onAvailable = (info: UpdateInfo): void => { log(`available ${describeVersion(info)}`) }
-  const onNotAvailable = (info: UpdateInfo): void => { log(`not-available ${describeVersion(info)}`) }
-  const onProgress = (info: ProgressInfo): void => { log(`download ${Math.round(info.percent)}%`) }
-  const onError = (error: Error): void => { log(`error ${error.message}`) }
-  const onDownloaded = (info: UpdateDownloadedEvent): void => {
-    log(`downloaded ${describeVersion(info)}`)
-    if (installPromptOpen) return
+  const onChecking = (): void => {
+    log('checking')
+    publishStatus({ phase: 'checking' })
+  }
+  const onAvailable = (info: UpdateInfo): void => {
+    availableVersion = describeVersion(info)
+    log(`available ${availableVersion}`)
+    publishStatus({ phase: 'downloading', version: availableVersion, percent: 0 })
+  }
+  const onNotAvailable = (info: UpdateInfo): void => {
+    log(`not-available ${describeVersion(info)}`)
+    publishStatus({ phase: 'idle' })
+  }
+  const onProgress = (info: ProgressInfo): void => {
+    const percent = Math.max(0, Math.min(100, Math.round(info.percent)))
+    log(`download ${percent}%`)
+    publishStatus({ phase: 'downloading', version: availableVersion, percent })
+  }
+  const onError = (error: Error): void => {
+    log(`error ${error.message}`)
+    publishStatus({ phase: 'error', message: error.message })
+  }
+  const promptInstall = (): boolean => {
+    if (downloadedVersion === undefined || installPromptOpen) return false
     installPromptOpen = true
     void showMessageBox({
       type: 'info',
       title: '发现启动器更新',
-      message: `DSH 客户端启动器 ${describeVersion(info)} 已下载完成。`,
+      message: `DSH 客户端启动器 ${downloadedVersion} 已下载完成。`,
       detail: '立即重启并安装更新，或选择稍后安装。',
       buttons: ['立即重启安装', '稍后'],
       defaultId: 0,
@@ -111,6 +142,13 @@ export function installAutoUpdate(
     }).finally(() => {
       installPromptOpen = false
     })
+    return true
+  }
+  const onDownloaded = (info: UpdateDownloadedEvent): void => {
+    downloadedVersion = describeVersion(info)
+    log(`downloaded ${downloadedVersion}`)
+    publishStatus({ phase: 'downloaded', version: downloadedVersion })
+    promptInstall()
   }
 
   updater.on('checking-for-update', onChecking)
@@ -125,6 +163,7 @@ export function installAutoUpdate(
   }, AUTO_UPDATE_CHECK_DELAY_MS)
 
   return {
+    requestInstall: promptInstall,
     dispose() {
       clear(timer)
       updater.removeListener('checking-for-update', onChecking)

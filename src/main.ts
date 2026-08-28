@@ -34,7 +34,7 @@ import {
   type RuntimeClientRegistry,
 } from './runtime-clients.js'
 import { applyWindowControl } from './window-controls.js'
-import { installAutoUpdate, type AutoUpdateHandle } from './auto-update.js'
+import { installAutoUpdate, type AutoUpdateHandle, type AutoUpdateStatus } from './auto-update.js'
 import { resolveRuntimeHomeMode } from './runtime-home.js'
 
 const BIN_NAME = 'dsh-desktop-shell'
@@ -80,6 +80,7 @@ let removeModuleFallback: (() => void) | undefined
 let removeElectronNodeChildCompatibility: (() => void) | undefined
 let electronNodePtyCompatibility: ElectronNodePtyCompatibility | undefined
 let autoUpdate: AutoUpdateHandle | undefined
+let autoUpdateStatus: AutoUpdateStatus = { phase: 'idle' }
 
 const shutdown = createShutdownController(
   async () => {
@@ -323,6 +324,14 @@ function installWindowControlHandler(): void {
   ipcMain.handle('dsh-desktop:active-runtime', (event: IpcMainInvokeEvent) => {
     if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) return undefined
     return activeRuntimeClient
+  })
+  ipcMain.handle('dsh-desktop:update-status', (event: IpcMainInvokeEvent) => {
+    if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) return { phase: 'idle' }
+    return autoUpdateStatus
+  })
+  ipcMain.handle('dsh-desktop:request-update-install', (event: IpcMainInvokeEvent) => {
+    if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) return false
+    return autoUpdate?.requestInstall() ?? false
   })
   ipcMain.on('dsh-desktop:window-control', (event: IpcMainEvent, command: unknown) => {
     if (window === undefined || window.isDestroyed() || event.sender !== window.webContents) return
@@ -621,6 +630,13 @@ async function start(): Promise<void> {
     isSmokeMode: smokeMode,
     resourcesPath: process.resourcesPath,
     env: process.env,
+  }, {
+    onStatus: status => {
+      autoUpdateStatus = status
+      if (window !== undefined && !window.isDestroyed()) {
+        window.webContents.send('dsh-desktop:update-status', status)
+      }
+    },
   })
   process.stdout.write(`DSH_DESKTOP_POC_READY ${origin}\n`)
 

@@ -96,11 +96,27 @@ function installDesktopChrome(): void {
       display: flex; align-items: flex-start; justify-content: space-between;
       color: var(--dsh-desktop-titlebar-foreground, rgb(245, 245, 245));
     }
+    #dsh-desktop-titlebar-context {
+      min-width: 0; height: ${DESKTOP_TITLE_BAR_HEIGHT}px;
+      display: flex; align-items: center; gap: 8px;
+    }
     #dsh-desktop-runtime-label {
       min-width: 0; height: ${DESKTOP_TITLE_BAR_HEIGHT}px; box-sizing: border-box;
       display: flex; align-items: center; padding: 0 12px;
       overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
       font: 12px/1.2 system-ui, sans-serif; opacity: .72;
+    }
+    #dsh-desktop-update-status {
+      -webkit-app-region: no-drag;
+      flex: none; border: 1px solid color-mix(in srgb, var(--dsh-desktop-titlebar-accent) 55%, transparent);
+      border-radius: 999px; padding: 3px 8px;
+      color: inherit; background: color-mix(in srgb, var(--dsh-desktop-titlebar-accent) 18%, transparent);
+      font: 12px/1.2 system-ui, sans-serif; cursor: default;
+    }
+    #dsh-desktop-update-status[hidden] { display: none; }
+    #dsh-desktop-update-status[data-actionable="true"] { cursor: pointer; }
+    #dsh-desktop-update-status[data-phase="error"] {
+      border-color: rgb(224, 87, 87); background: rgba(224, 87, 87, .16);
     }
     #dsh-desktop-window-controls {
       -webkit-app-region: no-drag;
@@ -137,6 +153,14 @@ function installDesktopChrome(): void {
   const runtimeLabel = document.createElement('div')
   runtimeLabel.id = 'dsh-desktop-runtime-label'
   runtimeLabel.textContent = '当前客户端：正在确认…'
+  const updateStatus = document.createElement('button')
+  updateStatus.id = 'dsh-desktop-update-status'
+  updateStatus.type = 'button'
+  updateStatus.hidden = true
+  updateStatus.setAttribute('aria-live', 'polite')
+  const context = document.createElement('div')
+  context.id = 'dsh-desktop-titlebar-context'
+  context.append(runtimeLabel, updateStatus)
   const controls = document.createElement('div')
   controls.id = 'dsh-desktop-window-controls'
   controls.setAttribute('role', 'toolbar')
@@ -153,7 +177,7 @@ function installDesktopChrome(): void {
       <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.25 2.25 7.5 7.5m0-7.5-7.5 7.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
     </button>
   `
-  titleBar.append(runtimeLabel, controls)
+  titleBar.append(context, controls)
   document.head.append(style)
   document.body.append(titleBar)
   void ipcRenderer.invoke('dsh-desktop:active-runtime').then((value: unknown) => {
@@ -164,6 +188,43 @@ function installDesktopChrome(): void {
     runtimeLabel.textContent = `当前客户端：${name}`
     runtimeLabel.title = root
   })
+  const renderUpdateStatus = (value: unknown): void => {
+    if (typeof value !== 'object' || value === null) return
+    const phase = Reflect.get(value, 'phase')
+    if (phase === 'idle') {
+      updateStatus.hidden = true
+      updateStatus.dataset.actionable = 'false'
+      return
+    }
+    updateStatus.hidden = false
+    updateStatus.dataset.phase = typeof phase === 'string' ? phase : ''
+    updateStatus.dataset.actionable = String(phase === 'downloaded')
+    if (phase === 'checking') {
+      updateStatus.textContent = '检查更新…'
+      updateStatus.title = '正在检查启动器更新'
+    } else if (phase === 'downloading') {
+      const percent = Reflect.get(value, 'percent')
+      const version = Reflect.get(value, 'version')
+      if (typeof percent !== 'number' || typeof version !== 'string') return
+      updateStatus.textContent = `更新 ${percent}%`
+      updateStatus.title = `正在下载启动器 ${version}`
+    } else if (phase === 'downloaded') {
+      const version = Reflect.get(value, 'version')
+      if (typeof version !== 'string') return
+      updateStatus.textContent = '可以重启'
+      updateStatus.title = `启动器 ${version} 已下载，点击选择安装`
+    } else if (phase === 'error') {
+      const message = Reflect.get(value, 'message')
+      if (typeof message !== 'string') return
+      updateStatus.textContent = '更新失败'
+      updateStatus.title = message
+    }
+  }
+  void ipcRenderer.invoke('dsh-desktop:update-status').then(renderUpdateStatus)
+  ipcRenderer.on('dsh-desktop:update-status', (_event, value: unknown) => { renderUpdateStatus(value) })
+  updateStatus.addEventListener('click', () => {
+    if (updateStatus.dataset.actionable === 'true') void ipcRenderer.invoke('dsh-desktop:request-update-install')
+  })
 
   const minimizeButton = controls.querySelector<HTMLButtonElement>('#dsh-desktop-window-minimize')
   const maximizeButton = controls.querySelector<HTMLButtonElement>('#dsh-desktop-window-maximize')
@@ -172,7 +233,7 @@ function installDesktopChrome(): void {
   maximizeButton?.addEventListener('click', () => { ipcRenderer.send('dsh-desktop:window-control', 'toggle-maximize') })
   closeButton?.addEventListener('click', () => { ipcRenderer.send('dsh-desktop:window-control', 'close') })
   titleBar.addEventListener('dblclick', (event) => {
-    if ((event.target as Element).closest('#dsh-desktop-window-controls') !== null) return
+    if ((event.target as Element).closest('#dsh-desktop-window-controls, #dsh-desktop-update-status') !== null) return
     ipcRenderer.send('dsh-desktop:window-control', 'toggle-maximize')
   })
   ipcRenderer.on('dsh-desktop:window-state', (_event, value: unknown) => {
