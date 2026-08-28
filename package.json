@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop-shell",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Independent Electron client launcher for DeepSeek Harness",
   "author": "mhdfy1988",

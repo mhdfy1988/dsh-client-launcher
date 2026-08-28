@@ -505,7 +505,7 @@ async function start(): Promise<void> {
   const dshVersion = readHarnessVersion()
   if (process.platform === 'win32') app.setAppUserModelId('local.dsh.client.launcher')
   process.stdout.write(`DSH_DESKTOP_POC_RUNTIME ${JSON.stringify({
-    desktop: '0.1.0',
+    desktop: '0.1.1',
     electron: process.versions.electron,
     node: process.versions.node,
     modules: process.versions.modules,

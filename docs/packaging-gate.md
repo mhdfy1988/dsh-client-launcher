@@ -34,7 +34,7 @@ $env:DSH_DESKTOP_AGENT_TOOLCHAIN_SCENARIO = 'terminal'
 pnpm.cmd run smoke:agent-toolchain
 ```
 
-`package:portable` 只把编译后的启动器放入 ASAR。正式目录布局把整个便携目录放在 DSH 根的 `client-launcher` 子目录；`DSH_DESKTOP_RUNTIME_DIR` 只用于开发或诊断时显式覆盖当前 DSH。
+`package:portable` 把编译后的启动器及 `electron-updater` 的最小生产依赖闭包放入 ASAR，不打入 DSH。依赖先在隔离暂存目录以 hoisted 布局安装，避免 pnpm Junction 与 Electron Packager 裁剪器的解析差异；打包完成后，脚本使用真实 Electron 从最终 `app.asar` 加载 `electron-updater.autoUpdater`，加载失败则整个打包失败。正式目录布局把整个便携目录放在 DSH 根的 `client-launcher` 子目录；`DSH_DESKTOP_RUNTIME_DIR` 只用于开发或诊断时显式覆盖当前 DSH。
 
 ## NSIS 正式安装器验证
 
@@ -42,7 +42,7 @@ Electron Builder `26.15.3` 已作为安装器层接入，不替换当前经过�
 
 `smoke:installer` 只接受显式的隔离 DSH checkout。门禁开始前会检查正式版和历史 Preview 进程，发现任一客户端仍运行时明确失败，不自动终止用户进程。当前门禁覆盖当前用户首次静默安装、同目录覆盖安装、两轮安装后启动、桌面及开始菜单快捷方式生成、卸载、快捷方式与注册项清理和异步自删除等待，并核对用户数据保留、DSH `package.json` 与锁文件摘要不变、Git 工作区状态回到安装前。安装后的前台 Agent 工具链也已单独通过。
 
-安装配置同时生成 `resources/app-update.yml`，正式打包版本由 `electron-updater` 使用该配置检查 GitHub 正式 Release；开发、便携和 smoke 会因未打包或显式禁用而跳过。发布必须同时上传正式 `latest.yml`、安装器和 blockmap；当前安装器未签名，真实升级下载、重启安装和失败恢复仍需单独验证。
+安装配置同时生成 `resources/app-update.yml`，正式打包版本由 `electron-updater` 使用该配置检查 GitHub 正式 Release；开发、便携和 smoke 会因未打包或显式禁用而跳过。`0.1.1` 起，正式安装器的前置便携打包必须通过最终 ASAR 更新器加载门禁；`0.1.0` 因缺少该依赖不能自行升级，需要用户手动覆盖安装一次。发布必须同时上传正式 `latest.yml`、安装器和 blockmap；当前安装器未签名，真实升级下载、重启安装和失败恢复仍需单独验证。
 
 启动器页面脚本会先从 HTML 模板生成，再执行 JavaScript 语法检查；安装版首次启动同时验证独立 `poc` 数据目录已创建，避免客户端注册表因父目录缺失而写入失败。
 

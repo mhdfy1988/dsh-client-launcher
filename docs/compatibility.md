@@ -4,7 +4,7 @@
 
 | 项目 | 固定版本或范围 | 当前结论 |
 | --- | --- | --- |
-| Windows | Windows 11 x64 | `0.1.0` 已验证目标；Windows 10 未验证 |
+| Windows | Windows 11 x64 | `0.1.1` 已验证目标；Windows 10 未验证 |
 | Node.js | `^22.19.0 || >=24.0.0` | 本机 Node 24.14.0 符合 |
 | Electron | `43.4.0` | 已锁定，需持续验证内置 Node 和原生 ABI |
 | DeepSeek Harness | `0.1.1-rc.2` | 已锁定，不承诺其他 RC 兼容 |

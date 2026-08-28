@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-28
+
+### Fixed
+
+- 修复 `0.1.0` 正式安装包未携带 `electron-updater` 生产依赖，导致启动器显示“自动启动已暂停 / Cannot find module 'electron-updater'”的问题。
+- 便携打包改为在隔离暂存目录只安装自动更新器的生产依赖闭包，不再依赖 Electron Packager 对 pnpm 链接布局的自动裁剪，也不会把 DSH 运行时打入启动器。
+- 增加最终 `app.asar` 的真实 Electron 加载门禁；只有成品中的 `electron-updater.autoUpdater` 可解析并可调用时，便携包和安装器才允许继续生成。
+
 ## [0.1.0] - 2026-08-28
 
 ### Changed
@@ -54,5 +62,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - 修复便携包 smoke 把临时运行数据写入交付目录且未清理的问题；验证数据改用系统临时目录并在结束时统一删除。
 - 修复沙箱 preload 使用 ESM 输出而未执行的问题，并在构建前清理旧产物，避免源码改名后继续加载陈旧文件。
 
-[Unreleased]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/mhdfy1988/dsh-desktop-shell/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mhdfy1988/dsh-desktop-shell/releases/tag/v0.1.0

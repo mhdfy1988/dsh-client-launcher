@@ -1,6 +1,6 @@
 # DSH 客户端启动器 Windows 安装器与发布流程
 
-> 状态：`0.1.0` 使用固定的正式产品身份、未签名 NSIS 安装器和 GitHub 正式更新通道；本机安装生命周期门禁已经通过，代码签名、从旧 Preview 迁移和真实在线升级回归尚未完成。
+> 状态：`0.1.1` 使用固定的正式产品身份、未签名 NSIS 安装器和 GitHub 正式更新通道；最终 ASAR 的自动更新器加载门禁与本机安装生命周期门禁已经通过，代码签名、从旧 Preview 迁移和真实在线升级回归尚未完成。
 
 ## 1. 目标与范围
 
@@ -29,7 +29,7 @@ Todo 项目已经验证“隔离候选包 → 本机试装 → CI 构建 → 草
 | 应用内容 | 应用自身完整运行时 | 只有启动器，DSH 仍由所在目录提供 |
 | 安装位置 | 独立应用目录 | 用户指定的 `DSH 根目录\client-launcher` |
 | 更新元数据 | Tauri `.sig` 与 `latest.json` | `electron-updater` 使用 Electron Builder 生成的 `latest.yml` |
-| 签名 | Tauri updater 签名与 Windows 代码签名分开 | `0.1.0` 尚未签名；后续接入 Windows Authenticode，自动更新信任链单独确认 |
+| 签名 | Tauri updater 签名与 Windows 代码签名分开 | `0.1.1` 尚未签名；后续接入 Windows Authenticode，自动更新信任链单独确认 |
 
 ## 3. 安装、升级与卸载不变式
 
@@ -140,7 +140,7 @@ pnpm.cmd run package:installer
 - 正式安装器：`.artifacts/installer/DSH-Client-Launcher-<version>-x64-setup.exe`
 - 更新元数据：`.artifacts/installer/latest.yml` 与同名安装器 `.blockmap`
 
-`0.1.0` 安装器大小为 `99,706,758` 字节，SHA-256 为 `B77F707C9DC4D6E5046A60261B97D0DBFDFF6CE00E814C88DC42638E61418DE2`。
+`0.1.1` 安装器大小为 `100,061,903` 字节，SHA-256 为 `69D22DF1ACCCBD4D19686FA081DBC9B746D53F728A8FE498E239A565A3506B27`。`0.1.0` 的历史安装器保持不变，但因未携带自动更新器依赖不能自行升级到本版本。
 
 安装器生命周期验证只接受显式隔离的全新 DSH checkout：
 
@@ -173,9 +173,9 @@ pnpm.cmd run smoke:installer
 - 已完成正式身份的当前用户首次静默安装、同目录覆盖安装和卸载；早期 Preview 人工试装已验证“所有用户”范围、目录选择和安装后真实启动，正式身份仍需补一次非静默人工复核。
 - 仍需补充普通用户权限、中文路径、空格路径、非系统盘路径、长时间托盘驻留、睡眠恢复和系统关机退出验证。
 
-### 阶段 D：正式发布流水线（首版手动流程）
+### 阶段 D：正式发布流水线（当前为手动流程）
 
-- `0.1.0` 先在本机隔离 DSH checkout 运行锁定依赖与安装器门禁；GitHub Actions 自动化留待后续。
+- 每个版本先在本机隔离 DSH checkout 运行锁定依赖与安装器门禁；GitHub Actions 自动化留待后续。
 - 校验 `package.json`、安装器配置、CHANGELOG 和标签版本一致。
 - 从 `CHANGELOG.md` 当前版本段生成 Release 正文。
 - 构建安装器并生成 SHA-256 摘要。
@@ -204,7 +204,7 @@ pnpm.cmd run smoke:installer
 - [x] 当前用户静默安装、快捷方式生成和卸载清理由生命周期 smoke 验证。
 - [ ] 正式身份的“所有用户”范围、非静默目录选择、安装路径、卸载注册项、应用启动和隔离用户数据完成人工复核；早期 Preview 已覆盖同一 NSIS 流程。
 - [x] 错误目录快速失败，明确报告缺失的 DSH 根标记，不搜索其他 DSH，也不回退内置副本。
-- [x] 自动更新协调器在安装包中生成 `app-update.yml`，开发、便携和 smoke 环境跳过检查。
+- [x] 自动更新协调器在安装包中生成 `app-update.yml`，最终 `app.asar` 由真实 Electron 成功加载 `autoUpdater`；开发、便携和 smoke 环境跳过检查。
 - [ ] 新版错误目录恢复操作完成人工复核；当前 Windows 自动化控制器无法捕获 NSIS 原生窗口，曾返回 `SetIsBorderRequired ... 不支持此接口`。
 - [ ] 正式签名阶段启用后，安装器和主 EXE 的签名均通过独立验证。
 - [ ] 公开 GitHub Release 提供 `latest.yml`、安装器和 blockmap，并核对文件名、版本、大小与摘要。
@@ -227,6 +227,7 @@ Workspace write 下 ACL runner 与 ConPTY 的已知限制必须继续写入 Rele
 | 卸载 smoke 偶发报告快捷方式残留 | NSIS 自删除进程删除安装目录和快捷方式的时序不同，目录消失不代表快捷方式已经完成清理 | 门禁在安装目录消失后继续有界等待桌面和开始菜单快捷方式消失 | 不把异步清理时序误判为卸载边界失败 |
 | 卸载器返回成功但没有卸载测试实例 | 静默安装没有固定安装范围，实际写入“所有用户”，测试却固定按“当前用户”卸载 | 首次安装、覆盖安装和卸载统一显式使用 `/currentuser` | 自动化安装范围稳定，卸载目标与安装记录一致 |
 | 客户端窗口仍打开时进入卸载验证 | 进程检查只匹配隔离安装目录，漏掉旧版正式安装目录中的进程 | 门禁同时检查正式 EXE 与历史 Preview 名称，发现运行实例就停止并提示用户关闭，不自动杀进程 | 不再带着用户正在使用的客户端执行安装或卸载 |
+| `0.1.0` 启动后提示缺少 `electron-updater` | 便携暂存目录只复制了启动器代码，最终 ASAR 没有生产依赖；既有 smoke 又显式关闭了更新检查 | 在隔离暂存目录只安装更新器生产依赖，并在真实 Electron 中从最终 ASAR 加载 `autoUpdater` | `0.1.1` 启动不再暂停自动更新；`0.1.0` 需手动覆盖安装一次 |
 
 详细的首次配置、启动、切换、升级、卸载和故障处理步骤见 [客户端启动器使用说明](./client-launcher-usage.md)。
 

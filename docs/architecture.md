@@ -5,7 +5,7 @@
 ```text
 Electron main
   ├─ 单实例与退出协调
-  ├─ app.asar：仅客户端启动器代码
+  ├─ app.asar：客户端启动器代码与自动更新器生产依赖
   ├─ 上一级目录：当前 DSH 已安装运行时或源码工作区
   ├─ 显式依赖安装与官方构建助手
   ├─ Profile 裸包解析适配
@@ -22,7 +22,7 @@ Electron main
 
 Electron 客户端启动器位于 Cordis 外，负责定位上一级 DSH、检查运行时、必要时由用户触发官方构建，再启动插件树。启动器通过当前 DSH 的安装锚点动态解析直接包；Profile 装配后注册可撤销的 Node 同步解析钩子，只为默认解析失败的裸包名使用 Profile 回退目录。Web Bundle 只声明 `agent-presets` 行，官方 CLI 还会把当前安装的 `config/agent-presets` 作为系统可信根注入该行；客户端启动器执行相同的启动器装配，且在 `standard/preset.yml` 缺失时直接终止启动，避免工作区可创建但会话无法创建。`src/plugin.ts` 位于 Cordis 内，只注册一个可撤销 effect，用来证明启动器自有能力能遵守官方插件生命周期。Agent、模型、会话、工具、权限和 Web 页面全部由当前目录的 Harness 提供。
 
-安装包自动更新由 `src/auto-update.ts` 负责：启动器只在 Electron 已打包且 `resources/app-update.yml` 存在时延迟检查正式 GitHub feed；默认客户端检测通过后虽然会直接进入 DSH 页面，更新协调器仍在主进程继续运行，不依赖选择页可见。更新可用后由 `electron-updater` 自动下载，下载完成通过原生对话框请求用户确认重启安装。开发运行、便携包和 smoke 通过显式条件跳过网络检查。每个正式 Release 必须同时提供 `latest.yml`、安装器和 blockmap；代码签名和失败恢复仍是后续增强项。
+安装包自动更新由 `src/auto-update.ts` 负责：启动器只在 Electron 已打包且 `resources/app-update.yml` 存在时延迟检查正式 GitHub feed；默认客户端检测通过后虽然会直接进入 DSH 页面，更新协调器仍在主进程继续运行，不依赖选择页可见。更新可用后由 `electron-updater` 自动下载，下载完成通过原生对话框请求用户确认重启安装。打包时在隔离暂存目录只安装自动更新器的生产依赖闭包，并用真实 Electron 从最终 `app.asar` 加载 `autoUpdater`；DSH 运行时仍由启动器所在目录的上一级提供。开发运行、便携包和 smoke 通过显式条件跳过网络检查。每个正式 Release 必须同时提供 `latest.yml`、安装器和 blockmap；代码签名和失败恢复仍是后续增强项。
 
 DSH 的 Windows 原生目录选择器通过 `process.execPath` 启动 Node worker，但 Electron Host 中该值指向桌面可执行文件，而且官方 worker 的实际选中路径返回链在 Electron 子进程中不稳定。启动器在 Node 内置 `spawn` 出口安装可撤销适配器：仅当命令是当前 Electron 可执行文件、且唯一参数明确指向 `@deepseek-ai/dsh-host-directory-picker-native/lib/worker.cjs` 时，使用 Electron `dialog.showOpenDialog` 打开单目录选择器，并生成只实现 DSH 所需 `message`、`error`、`exit`、`kill` 和 `unref` 行为的进程代理。代理发送既有 `{kind:'done', path}` 消息，取消时路径为 `null`；父进程环境、其他插件子进程和重启环境不变。
 
